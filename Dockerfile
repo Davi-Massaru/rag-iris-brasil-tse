@@ -1,42 +1,38 @@
-ARG IMAGE=intersystemsdc/irishealth-community:2020.3.0.200.0-zpm
-ARG IMAGE=intersystemsdc/iris-community:2020.4.0.547.0-zpm
-ARG IMAGE=containers.intersystems.com/intersystems/iris:2021.1.0.215.0
-ARG IMAGE=intersystemsdc/irishealth-community
-ARG IMAGE=intersystemsdc/iris-community
-ARG IMAGE=intersystemsdc/iris-community:preview
-ARG IMAGE=intersystems/iris-community:latest-cd
-FROM $IMAGE
+ARG IRIS_IMAGE=intersystems/iris-community:latest-cd
+
+FROM ${IRIS_IMAGE} AS iris
 
 WORKDIR /home/irisowner/dev
+ENV IRISUSERNAME=_SYSTEM \
+    IRISPASSWORD=SYS \
+    IRISNAMESPACE=IRISAPP \
+    PATH=/usr/irissys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/irisowner/bin
 
-## install git
-## USER root
-##RUN apt update && apt-get -y install git
-##USER ${ISC_PACKAGE_MGRUSER}
-
-ARG TESTS=0
-ARG MODULE="dc-sample"
-ARG NAMESPACE="IRISAPP"
-
-## Embedded Python environment
-ENV IRISUSERNAME "_SYSTEM"
-ENV IRISPASSWORD "SYS"
-ENV IRISNAMESPACE $NAMESPACE
-ENV PYTHON_PATH=/usr/irissys/bin/
-ENV PATH "/usr/irissys/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/irisowner/bin"
-
-COPY .iris_init /home/irisowner/.iris_init
-RUN wget https://pm.community.intersystems.com/packages/zpm/latest/installer -O /tmp/zpm.xml
+COPY merge.cpf iris.script module.xml ./
+COPY iris ./iris
 
 USER root
-RUN mkdir -p /data/IRISAPP_DATA/ /data/IRISAPP_DATA/irisapp_dataenstemp /data/IRISAPP_DATA/irisapp_datasecondary && \
-    chown irisowner:irisowner /data/ -R
-USER ${ISC_PACKAGE_MGRUSER}
+RUN mkdir -p /data/IRISAPP_DATA/irisapp_dataenstemp \
+    /data/IRISAPP_DATA/irisapp_datasecondary \
+    && chown -R irisowner:irisowner /data
+USER irisowner
 
+RUN iris start IRIS \
+    && iris merge iris ./merge.cpf \
+    && iris session IRIS < iris.script | tee /tmp/iris-load.log \
+    && ! grep -q "ERROR #" /tmp/iris-load.log \
+    && iris stop IRIS quietly
 
-RUN --mount=type=bind,src=.,dst=. \
-    iris start IRIS && \
-    iris merge iris ./merge.cpf && \
-	iris session IRIS < iris.script && \
-    ([ $TESTS -eq 0 ] || iris session iris -U $NAMESPACE "##class(%ZPM.PackageManager).Shell(\"test $MODULE -v -only\",1,1)") && \
-    iris stop IRIS quietly
+FROM python:3.12-slim AS app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /opt/iris-political
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app ./app
+
+EXPOSE 8000 8501
+CMD ["waitress-serve", "--call", "--listen=0.0.0.0:8000", "app.api.app:create_app"]

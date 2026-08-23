@@ -2,13 +2,62 @@ services:
   iris:
     build:
       context: .
-      dockerfile: Dockerfile
-    restart: always
-    environment:
-      - ISC_CPF_MERGE_FILE=/home/irisowner/dev/merge.cpf
+      target: iris
+    restart: unless-stopped
     ports:
-      - 1972
-      - 52773
-      - 53773
+      - "1972:1972"
+      - "52773:52773"
     volumes:
-      - ./:/home/irisowner/dev
+      - iris-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "iris qlist IRIS | grep -q running"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    environment:
+      IRIS_HOST: iris
+      IRIS_PORT: 1972
+      IRIS_NAMESPACE: IRISAPP
+      IRIS_USERNAME: ${IRIS_USERNAME:-_SYSTEM}
+      IRIS_PASSWORD: ${IRIS_PASSWORD:-SYS}
+      IRIS_SQL_SCHEMA: IRISPolitical_Model
+      TSE_DATASET_ID: ${TSE_DATASET_ID:-candidatos-2026}
+      INGEST_ELECTION_YEAR: ${INGEST_ELECTION_YEAR:-2026}
+      INGEST_STATES: ${INGEST_STATES:-SP}
+      INGEST_OFFICES: ${INGEST_OFFICES:-DEPUTADO FEDERAL,GOVERNADOR}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      iris:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  ui:
+    build:
+      context: .
+      target: app
+    restart: unless-stopped
+    command:
+      - streamlit
+      - run
+      - app/ui/streamlit_app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+      - --server.headless=true
+    environment:
+      API_BASE_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "8501:8501"
+
+volumes:
+  iris-data:

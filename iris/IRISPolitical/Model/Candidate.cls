@@ -35,7 +35,7 @@ Property MatchStatus As %String(MAXLEN = 20);
 
 /// Confiança técnica da resolução de identidade (0-100).
 /// Não representa qualquer avaliação política.
-Property MatchConfidence As %Decimal(PRECISION = 5, SCALE = 2);
+Property MatchConfidence As %Decimal(SCALE = 2);
 
 /// URL oficial de origem.
 Property SourceUrl As %String(MAXLEN = 1000);
