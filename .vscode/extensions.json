@@ -1,17 +1,21 @@
 {
-    "recommendations": [
-        "eamodio.gitlens",
-        "georgejames.gjlocate",
-        "github.copilot",
-        "intersystems-community.servermanager",
-        "intersystems-community.sqltools-intersystems-driver",
-        "intersystems-community.testingmanager",
-        "intersystems-community.vscode-objectscript",
-        "intersystems.language-server",
-        "mohsen1.prettify-json",
-        "ms-azuretools.vscode-docker",
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "ms-vscode-remote.remote-containers"
-    ]
+  "recommendations": [
+    "intersystems-community.objectscript-pack",
+    "intersystems-community.sqltools-intersystems-driver",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "charliermarsh.ruff",
+    "ms-python.mypy-type-checker",
+    "ms-azuretools.vscode-containers",
+    "docker.docker",
+    "redhat.vscode-yaml",
+    "redhat.vscode-xml",
+    "tamasfe.even-better-toml",
+    "humao.rest-client"
+  ],
+  "unwantedRecommendations": [
+    "ms-azuretools.vscode-docker",
+    "mohsen1.prettify-json"
+  ]
 }

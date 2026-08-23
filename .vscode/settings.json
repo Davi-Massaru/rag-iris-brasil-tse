@@ -1,23 +1,79 @@
 {
-    "files.associations": {
-
-        "Dockerfile*": "dockerfile",
-        "iris.script": "objectscript"
-      },
-    "objectscript.conn" :{
-      "active": false,
-      "ns": "IRISAPP",
-      "username": "_SYSTEM",
-      "password": "SYS",
-      "docker-compose": {
-        "service": "iris",
-        "internalPort": 52773
-      },
-      "links": {
-        "UnitTest Portal": "${serverUrl}/csp/sys/%25UnitTest.Portal.Home.cls?$NAMESPACE=IRISAPP",
-        "Error Log": "${serverUrl}/csp/sys/op/UtilSysAppErrorNamespaces.csp"
-      }
+  "files.associations": {
+    "Dockerfile*": "dockerfile",
+    "iris.script": "objectscript"
+  },
+  "files.exclude": {
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/__pycache__": true,
+    ".venv": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.pytest_cache/**": true,
+    "**/.ruff_cache/**": true,
+    "**/__pycache__/**": true,
+    "**/.venv/**": true
+  },
+  "search.exclude": {
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/__pycache__": true,
+    ".venv": true
+  },
+  "editor.rulers": [
+    100
+  ],
+  "editor.formatOnSave": false,
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+  "python.envFile": "${workspaceFolder}/.env",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}",
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
+  "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+  "ruff.importStrategy": "fromEnvironment",
+  "mypy-type-checker.importStrategy": "fromEnvironment",
+  "mypy-type-checker.reportingScope": "workspace",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "[yaml]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "[xml]": {
+    "editor.defaultFormatter": "redhat.vscode-xml"
+  },
+  "objectscript.conn": {
+    "active": true,
+    "ns": "IRISAPP",
+    "username": "_SYSTEM",
+    "password": "SYS",
+    "docker-compose": {
+      "service": "iris",
+      "file": "docker-compose.yml",
+      "internalPort": 52773
     },
-    "intersystems.testingManager.client.relativeTestRoot": "tests"
-
+    "links": {
+      "Management Portal": "${serverUrl}/csp/sys/UtilHome.csp",
+      "SQL Portal": "${serverUrl}/csp/sys/exp/%25CSP.UI.Portal.SQL.Home.zen?$NAMESPACE=IRISAPP",
+      "Application Error Log": "${serverUrl}/csp/sys/op/UtilSysAppErrorNamespaces.csp",
+      "WSGI Health": "http://localhost:52773/api/health"
+    }
+  }
 }

@@ -1,18 +1,159 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "type": "objectscript",
-        "request": "launch",
-        "name": "ObjectScript Debug Class",
-        "program": "##class(dc.sample.ObjectScript).Test()",
-      },
-      {
-        "type": "objectscript",
-        "request": "attach",
-        "name": "ObjectScript Attach",
-        "processId": "${command:PickProcess}",
-        "system": true
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Flask local :8000",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.api",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "IRIS_HOST": "localhost",
+        "IRIS_PORT": "1972",
+        "IRIS_NAMESPACE": "IRISAPP",
+        "IRIS_USERNAME": "_SYSTEM",
+        "IRIS_PASSWORD": "SYS",
+        "IRIS_SQL_SCHEMA": "IRISPolitical_Model",
+        "API_HOST": "0.0.0.0",
+        "API_PORT": "8000"
       }
-    ]
-  }
+    },
+    {
+      "name": "Python: Streamlit -> IRIS WSGI",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "app/ui/streamlit_app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501",
+        "--server.headless=true"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "API_BASE_URL": "http://localhost:52773/api"
+      }
+    },
+    {
+      "name": "Python: Streamlit -> Flask local",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "streamlit",
+      "args": [
+        "run",
+        "app/ui/streamlit_app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501",
+        "--server.headless=true"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "API_BASE_URL": "http://localhost:8000"
+      }
+    },
+    {
+      "name": "Python: Ingestão local",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.ingestion.pipeline",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "IRIS_HOST": "localhost",
+        "IRIS_PORT": "1972",
+        "IRIS_NAMESPACE": "IRISAPP",
+        "IRIS_USERNAME": "_SYSTEM",
+        "IRIS_PASSWORD": "SYS",
+        "IRIS_SQL_SCHEMA": "IRISPolitical_Model"
+      }
+    },
+    {
+      "name": "Pytest: unitários",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-m",
+        "unit",
+        "-ra"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Pytest: integração IRIS",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-m",
+        "integration",
+        "-ra"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "RUN_IRIS_TESTS": "1",
+        "IRIS_HOST": "localhost",
+        "IRIS_PORT": "1972",
+        "IRIS_NAMESPACE": "IRISAPP",
+        "IRIS_USERNAME": "_SYSTEM",
+        "IRIS_PASSWORD": "SYS"
+      }
+    },
+    {
+      "name": "Pytest: smoke Docker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-m",
+        "smoke",
+        "-ra"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "RUN_SMOKE_TESTS": "1"
+      }
+    },
+    {
+      "name": "Python: Attach debugpy :5678",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "justMyCode": true
+    },
+    {
+      "name": "ObjectScript: Attach",
+      "type": "objectscript",
+      "request": "attach",
+      "processId": "${command:PickProcess}",
+      "system": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Python local: Flask + Streamlit",
+      "configurations": [
+        "Python: Flask local :8000",
+        "Python: Streamlit -> Flask local"
+      ],
+      "stopAll": true
+    }
+  ]
+}
