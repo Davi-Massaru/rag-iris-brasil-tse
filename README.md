@@ -35,6 +35,152 @@ Serviços ativos:
 
 Não existe serviço `api`. Não existe Waitress. O servidor HTTP oficial da API é o IRIS.
 
+## Como o pipeline funciona
+
+O pipeline transforma dados públicos heterogêneos em evidências estruturadas e rastreáveis para busca híbrida e geração de respostas. O processo mantém separadas as responsabilidades de obtenção, normalização, persistência, recuperação e geração.
+
+```mermaid
+flowchart TD
+    TSE["TSE: CKAN, ZIP, CSV e PDF"] --> ING["Ingestão e validação"]
+    CAM["Câmara: API REST JSON"] --> ING
+    ING --> NORM["Normalização e vínculo de identidade"]
+    NORM --> REL["Dados relacionais no IRIS"]
+    REL --> BUILD["Construção do texto recuperável"]
+    BUILD --> CHUNK["Chunking por tokens + proveniência"]
+    CHUNK --> EMB["Embedding de cada chunk"]
+    EMB --> VEC["%Vector no PoliticalChunk"]
+    Q["Pergunta do usuário"] --> QEMB["Embedding da pergunta"]
+    Q --> LEX["Busca lexical"]
+    QEMB --> SEM["Busca vetorial no IRIS"]
+    VEC --> SEM
+    CHUNK --> LEX
+    LEX --> RRF["Reciprocal Rank Fusion"]
+    SEM --> RRF
+    RRF --> TOP["Evidências mais relevantes"]
+    TOP --> PROMPT["Prompt restritivo + fontes"]
+    PROMPT --> LLM["Geração da resposta"]
+    LLM --> OUT["Resposta em PT-BR + fontes oficiais"]
+```
+
+### 1. Ingestão
+
+O TSE é acessado pela API CKAN. O pipeline descobre os recursos ativos, baixa os arquivos por HTTPS, calcula SHA-256, valida os ZIPs e interpreta o CSV oficial em Latin-1. As propostas de governo são extraídas dos PDFs e associadas ao candidato pelo `SQ_CANDIDATO` presente no nome oficial do arquivo, sem aproximação por nome.
+
+A API Dados Abertos da Câmara fornece deputados, histórico parlamentar, mandatos externos, proposições, autores e temas. As coleções seguem a paginação `links[rel=next]`. O vínculo TSE–Câmara usa nome, nome de urna, UF e histórico partidário; somente correspondências classificadas como `MATCHED` disparam a ingestão parlamentar automática.
+
+Cada execução registra origem, horários, hash e contadores em `IngestionRun`. Downloads e parsing ocorrem fora da transação; as gravações usam transações explícitas e chaves de idempotência no IRIS.
+
+### 2. Persistência multimodelo
+
+O mesmo backend IRIS mantém duas representações complementares:
+
+- relacional: `Candidate`, `PoliticalHistory`, `Proposition`, `PropositionAuthor`, `PropositionTopic`, `ProposalDocument` e `IngestionRun` preservam campos, vínculos e identificadores oficiais;
+- vetorial: `PoliticalChunk` reúne o texto recuperável, a proveniência, os metadados, o hash e o embedding em `%Vector(DATATYPE = "DOUBLE", LEN = 1536)`.
+
+Essa separação permite usar SQL e relacionamentos para filtros determinísticos, enquanto a representação vetorial atende consultas por similaridade semântica.
+
+### 3. Estratégia de chunking
+
+O chunking é feito com `tiktoken` e parâmetros configuráveis, atualmente com janelas de 700 tokens e sobreposição de 100 tokens. O avanço efetivo é de 600 tokens. A mesma codificação é reutilizada para contar tokens e dividir o conteúdo; se o modelo não possuir uma codificação conhecida pelo `tiktoken`, o código usa `cl100k_base` como fallback.
+
+A escolha busca equilibrar três necessidades:
+
+- contexto suficiente para manter uma proposição, um registro histórico ou uma passagem de proposta de governo compreensível;
+- granularidade suficiente para que a busca recupere o trecho relevante, sem enviar documentos inteiros ao modelo;
+- continuidade entre janelas, pois a sobreposição reduz a perda de informações situadas na fronteira entre dois chunks.
+
+Antes da divisão, o texto tem quebras de linha e espaços normalizados. Proposições e históricos curtos formam naturalmente um único chunk; conteúdos extensos, sobretudo propostas de governo, produzem múltiplas janelas. Marcadores de página extraídos do PDF permitem registrar `pageStart` e `pageEnd` quando presentes.
+
+Cada chunk conserva:
+
+```text
+Candidate
+SourceType
+SourceId
+ChunkIndex
+Title
+Content
+SourceUrl
+MetadataJson
+ContentHash
+TokenCount
+```
+
+O `ContentHash` é um SHA-256 do texto normalizado. Ele sustenta idempotência, identifica alterações e evita duplicação do mesmo conteúdo. A estratégia atual é deliberadamente simples e reproduzível: usa janelas fixas por tokens, não segmentação semântica por títulos ou parágrafos. Para documentos com estrutura complexa, uma evolução futura deve comparar essa abordagem com chunking hierárquico por seção usando métricas de retrieval.
+
+### 4. Escolha do embedding
+
+O padrão é `text-embedding-3-small`, chamado pelo endpoint de embeddings da OpenAI. A [documentação oficial do modelo](https://developers.openai.com/api/docs/models/text-embedding-3-small) o caracteriza como um modelo pequeno de embeddings aplicável a busca e medição de relação entre textos.
+
+No projeto, a escolha atende ao MVP porque:
+
+- documentos e perguntas usam exatamente o mesmo modelo;
+- a chamada solicita explicitamente 1.536 dimensões;
+- a dimensão coincide com `PoliticalChunk.Embedding` no IRIS;
+- o vetor é validado antes da persistência;
+- o perfil menor é adequado ao ciclo de ingestão e consulta da demonstração.
+
+O nome do modelo é configurável, mas a implementação atual exige 1.536 dimensões. Trocar o modelo requer confirmar suporte ao parâmetro de dimensão, compatibilidade com o tokenizer e recompilar a propriedade `%Vector` caso a dimensão seja alterada.
+
+### 5. Indexação e recuperação
+
+Após a criação dos chunks, os embeddings pendentes são gerados e persistidos em `PoliticalChunk.Embedding`. O MVP não cria índice vetorial HNSW: a busca semântica usa `VECTOR_COSINE(Embedding, TO_VECTOR(...))` no IRIS e ordena pela similaridade. Essa opção reduz a configuração inicial e atende cargas pequenas de demonstração; volumes maiores devem adicionar e medir um índice vetorial compatível com a versão do IRIS.
+
+A recuperação executa dois rankings independentes:
+
+- lexical: normaliza acentos e caixa, favorece a frase exata e conta ocorrências dos termos em `Title` e `Content`;
+- vetorial: gera o embedding da pergunta e calcula similaridade cosseno no IRIS.
+
+A busca lexical atual carrega do IRIS os chunks compatíveis com os filtros e calcula o ranking em Python. Isso mantém a regra transparente, mas deve ser substituído por um índice textual do IRIS se o volume crescer.
+
+Cada mecanismo retorna até 20 resultados. O RRF combina as posições com `k = 60`, sem tentar comparar diretamente escalas incompatíveis de pontuação, e entrega por padrão as 8 evidências mais bem posicionadas.
+
+```mermaid
+flowchart LR
+    Q["Consulta"] --> L["Lexical: frase e termos"]
+    Q --> E["Embedding da consulta"]
+    E --> V["Vetorial: VECTOR_COSINE"]
+    L --> LT["Ranking lexical"]
+    V --> VT["Ranking vetorial"]
+    LT --> R["RRF, k = 60"]
+    VT --> R
+    R --> K["Top K com proveniência"]
+```
+
+### 6. Prompt e geração da resposta
+
+O serviço RAG recebe as evidências recuperadas e constrói blocos identificados como `[E1]`, `[E2]` e assim por diante. Cada bloco inclui título, tipo, URL oficial e trecho. As instruções do modelo exigem uso exclusivo das evidências, proíbem recomendação de voto e classificação ideológica e determinam que insuficiência de contexto seja declarada explicitamente.
+
+Se a busca não retornar evidências, o LLM nem é chamado. A API devolve a mensagem de insuficiência e uma lista vazia de fontes. Quando há contexto, `/ask` retorna a resposta e todas as fontes utilizadas no prompt.
+
+## Aderência ao concurso
+
+A implementação foi confrontada com as [regras publicadas do concurso](https://community.intersystems.com/post/1st-portuguese-programming-contest-2026). A tabela diferencia o que existe no repositório do que ainda depende de preparação para a submissão.
+
+| Critério | Evidência no projeto | Situação |
+|---|---|---|
+| Aplicação RAG com backend InterSystems | Classes `%Persistent`, `%Vector`, SQL, WSGI e Embedded Python executam no IRIS | Implementado |
+| Dados multimodelo | Modelo relacional e representação vetorial são acessados no mesmo backend | Implementado |
+| Busca híbrida | Ranking lexical e similaridade vetorial são combinados por RRF | Implementado |
+| Acesso a API pública | CKAN/Dados Abertos do TSE e API Dados Abertos da Câmara | Implementado |
+| Estratégia de chunking e escolha de embedding | Análise, parâmetros, limitações e compatibilidade vetorial documentados acima | Documentado e implementado |
+| Clareza do pipeline RAG | Ingestão, chunking, persistência vetorial, retrieval, prompt e geração estão descritos e mapeados para o código | Documentado e implementado |
+| WSGI para a aplicação web | `IRIS Web Gateway -> %SYS.Python.WSGI -> Flask` configurado automaticamente por IPM | Implementado |
+| Foreign Table | Não há definição ou acesso a Foreign Table no repositório | Não implementado |
+
+Na página oficial, WSGI aparece no bloco do tópico PyProd, enquanto este projeto concorre no tópico RAG. A arquitetura WSGI está implementada e documentada, mas sua consideração na avaliação do tópico RAG não deve ser presumida.
+
+### Pendências para a submissão
+
+O código cobre o núcleo técnico, mas a inscrição completa também depende de materiais externos ao runtime:
+
+- publicar a aplicação no Open Exchange;
+- publicar um artigo na Developer Community em português, descrevendo ideia, processo, instruções, metodologia, prompts, ferramentas de IA, ajustes e alucinações observadas;
+- incluir no artigo as tags e o link da aplicação exigidos pela organização;
+- preparar a aplicação, descrição, instruções, capturas e README em inglês para o pacote enviado ao Open Exchange.
+
+Este README permanece em PT-BR conforme a documentação de desenvolvimento do repositório. Antes do envio ao Open Exchange, a versão inglesa deve ser preparada e validada sem eliminar este passo a passo.
+
 ## 3. Pré-requisitos
 
 Confirme antes de avançar:
