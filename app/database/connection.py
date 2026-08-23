@@ -2,9 +2,29 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from importlib import import_module
+from typing import Any, Protocol, cast
 
 from app.config import Settings
+
+
+class _EmbeddedIrisSql(Protocol):
+    def exec(self, sql: str, *params: Any) -> Iterator[Any]: ...
+
+
+class _EmbeddedIrisApi(Protocol):
+    sql: _EmbeddedIrisSql
+
+    def tstart(self) -> None: ...
+
+    def tcommit(self) -> None: ...
+
+    def trollbackone(self) -> None: ...
+
+
+def _embedded_iris() -> _EmbeddedIrisApi:
+    """Load the vendor API without relying on its inaccurate type declarations."""
+    return cast(_EmbeddedIrisApi, import_module("iris"))
 
 
 class EmbeddedIrisCursor:
@@ -14,10 +34,8 @@ class EmbeddedIrisCursor:
         self.rowcount = -1
 
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> None:
-        import iris
-
         self.connection._ensure_transaction()
-        result = iris.sql.exec(sql, *params)
+        result = _embedded_iris().sql.exec(sql, *params)
         self._rows = iter(result)
         statement = sql.lstrip().partition(" ")[0].upper()
         self.rowcount = -1 if statement in {"SELECT", "WITH"} else 1
@@ -49,9 +67,7 @@ class EmbeddedIrisConnection:
         if self._closed:
             raise RuntimeError("connection is closed")
         if not self._transaction_started:
-            import iris
-
-            iris.tstart()
+            _embedded_iris().tstart()
             self._transaction_started = True
 
     def cursor(self) -> EmbeddedIrisCursor:
@@ -61,16 +77,12 @@ class EmbeddedIrisConnection:
 
     def commit(self) -> None:
         if self._transaction_started:
-            import iris
-
-            iris.tcommit()
+            _embedded_iris().tcommit()
             self._transaction_started = False
 
     def rollback(self) -> None:
         if self._transaction_started:
-            import iris
-
-            iris.trollbackone()
+            _embedded_iris().trollbackone()
             self._transaction_started = False
 
     def close(self) -> None:
@@ -83,12 +95,12 @@ class IrisConnectionFactory:
         self.settings = settings
 
     def connect(self) -> Any:
-        import iris
+        iris = import_module("iris")
 
         if hasattr(iris, "sql"):
             return EmbeddedIrisConnection()
 
-        from iris import dbapi  # type: ignore[attr-defined, no-redef]
+        dbapi = import_module("iris.dbapi")
 
         connection = dbapi.connect(
             hostname=self.settings.iris_host,

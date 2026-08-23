@@ -8,7 +8,7 @@ from openai import OpenAI
 class Embedder(Protocol):
     model: str
 
-    def embed(self, text: str) -> list[float]: ...
+    def embed(self, text: str, /) -> list[float]: ...
 
 
 class OpenAIEmbedder:

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import zipfile
 from pathlib import Path
+from typing import cast
 
 import pytest
 
-from app.ingestion.http import ExternalContractError
+from app.ingestion.http import ExternalContractError, HttpClient
 from app.ingestion.tse.client import TseClient
 from app.ingestion.tse.contracts import TseDataset, TseResource
 from app.ingestion.tse.parser import parse_candidates, validate_zip
@@ -65,6 +66,6 @@ def test_tse_selects_only_active_official_candidate_resource(settings) -> None: 
     )
     dataset = TseDataset(id="x", name="x", title="x", resources=(active,))
 
-    selected = TseClient(settings, object()).candidate_resource(dataset)
+    selected = TseClient(settings, cast(HttpClient, object())).candidate_resource(dataset)
 
     assert selected.id == "1"

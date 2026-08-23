@@ -6,7 +6,6 @@ from typing import Protocol
 from openai import OpenAI
 
 from app.domain import SearchResult
-from app.retrieval import HybridSearch
 
 from .prompt import POLICY, build_prompt
 
@@ -17,7 +16,17 @@ NO_EVIDENCE = (
 
 
 class LanguageModel(Protocol):
-    def generate(self, instructions: str, prompt: str) -> str: ...
+    def generate(self, instructions: str, prompt: str, /) -> str: ...
+
+
+class Retrieval(Protocol):
+    def search(
+        self,
+        query: str,
+        candidate_id: int | None = None,
+        source_type: str | None = None,
+        top_k: int = 8,
+    ) -> list[SearchResult]: ...
 
 
 class OpenAILanguageModel:
@@ -42,7 +51,7 @@ class RagAnswer:
 
 
 class RagService:
-    def __init__(self, retrieval: HybridSearch, language_model: LanguageModel) -> None:
+    def __init__(self, retrieval: Retrieval, language_model: LanguageModel) -> None:
         self.retrieval = retrieval
         self.language_model = language_model
 

@@ -30,7 +30,8 @@ pytestmark = [
 class StaticEmbedder:
     model = "integration-test"
 
-    def embed(self, _text: str) -> list[float]:
+    def embed(self, text: str) -> list[float]:
+        del text
         return [1.0, *([0.0] * 1535)]
 
 
@@ -81,7 +82,9 @@ def test_repository_transaction_vector_and_hybrid_search(connection) -> None:  #
             updated = candidates.upsert(candidate_value(tse_id, "TESTE ATUALIZADO"))
         assert unchanged.action == "UNCHANGED"
         assert updated.action == "UPDATED"
-        assert candidates.find_by_id(candidate_id).ballot_name == "TESTE ATUALIZADO"
+        found = candidates.find_by_id(candidate_id)
+        assert found is not None
+        assert found.ballot_name == "TESTE ATUALIZADO"
 
         with pytest.raises(RuntimeError, match="rollback"), transaction(connection):
             candidates.upsert(candidate_value(rollback_tse_id))

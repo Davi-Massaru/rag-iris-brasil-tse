@@ -22,13 +22,16 @@ class CamaraStub:
         self.detail = detail
         self.parties = parties
 
-    def search_deputies(self, _name: str, _state: str) -> tuple[DeputySummary, ...]:
+    def search_deputies(self, name: str, state: str) -> tuple[DeputySummary, ...]:
+        del name, state
         return (DeputySummary(id=self.detail.id, uri="https://official", nome="JOAO"),)
 
-    def deputy(self, _deputy_id: int) -> DeputyDetail:
+    def deputy(self, deputy_id: int) -> DeputyDetail:
+        del deputy_id
         return self.detail
 
-    def history(self, _deputy_id: int) -> tuple[HistoryItem, ...]:
+    def history(self, deputy_id: int) -> tuple[HistoryItem, ...]:
+        del deputy_id
         return tuple(HistoryItem(siglaPartido=party) for party in self.parties)
 
 

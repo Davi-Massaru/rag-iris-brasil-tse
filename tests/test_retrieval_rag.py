@@ -66,7 +66,8 @@ class EmptyRetrieval:
 
 
 class ForbiddenModel:
-    def generate(self, _instructions: str, _prompt: str) -> str:
+    def generate(self, instructions: str, prompt: str) -> str:
+        del instructions, prompt
         raise AssertionError("LLM must not be called without evidence")
 
 

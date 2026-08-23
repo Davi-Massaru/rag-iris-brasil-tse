@@ -4,14 +4,22 @@ import json
 import re
 import unicodedata
 from pathlib import Path
+from typing import Protocol
 
 from app.domain import Candidate, MatchResult, MatchStatus
-from app.ingestion.camara.client import CamaraClient
-from app.ingestion.camara.contracts import DeputyDetail
+from app.ingestion.camara.contracts import DeputyDetail, DeputySummary, HistoryItem
+
+
+class CandidateDataClient(Protocol):
+    def search_deputies(self, name: str, state: str, /) -> tuple[DeputySummary, ...]: ...
+
+    def deputy(self, deputy_id: int, /) -> DeputyDetail: ...
+
+    def history(self, deputy_id: int, /) -> tuple[HistoryItem, ...]: ...
 
 
 class CandidateMatcher:
-    def __init__(self, client: CamaraClient, overrides_path: Path | None = None) -> None:
+    def __init__(self, client: CandidateDataClient, overrides_path: Path | None = None) -> None:
         self.client = client
         self.overrides = _load_overrides(overrides_path)
 

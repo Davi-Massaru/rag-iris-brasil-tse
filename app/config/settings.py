@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = Field(default=8000, gt=0, le=65535)
 
+    def __init__(self, **values: Any) -> None:
+        """Accept raw environment-shaped values and let Pydantic validate and coerce them."""
+        super().__init__(**values)
+
     @field_validator("ingest_states", "ingest_offices", mode="before")
     @classmethod
     def parse_csv_tuple(cls, value: Any) -> tuple[str, ...]:
@@ -93,4 +97,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
