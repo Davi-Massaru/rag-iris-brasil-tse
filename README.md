@@ -221,6 +221,121 @@ LLM_API_KEY=sua-chave
 
 A chave é dispensável para `/health` e consultas básicas. Ela é obrigatória para embeddings e respostas RAG.
 
+### Referência completa das variáveis de ambiente
+
+`app.config.Settings` carrega o arquivo `.env` automaticamente quando a aplicação é
+executada diretamente no host. Os nomes não diferenciam maiúsculas de minúsculas, mas
+o projeto usa maiúsculas por convenção. Valores vazios são ignorados; por isso,
+`LLM_API_KEY=` resulta em chave ausente.
+
+No Docker Compose, o `.env` também é usado para interpolar o
+`docker-compose.yml`. Somente variáveis declaradas em `environment` são encaminhadas
+ao respectivo container. Uma variável existente no `.env`, mas não encaminhada pelo
+Compose, continua usando o padrão de `Settings` dentro do container.
+
+#### IRIS e persistência
+
+| Variável | Padrão | Onde é utilizada | Efeito |
+|---|---:|---|---|
+| `IRIS_HOST` | `localhost` | `app/database/connection.py` | Host da conexão TCP usada no desenvolvimento local. No Embedded Python dentro do IRIS, não é utilizada. |
+| `IRIS_PORT` | `1972` | `app/database/connection.py` | Porta do SuperServer para o driver DB-API local. Não controla o mapeamento de portas do Docker. |
+| `IRIS_NAMESPACE` | `IRISAPP` | `app/database/connection.py` | Namespace usado pela conexão TCP. No runtime embarcado, vale o namespace do processo IRIS. |
+| `IRIS_USERNAME` | `_SYSTEM` | `app/database/connection.py` | Usuário do driver DB-API local. Não é usado pela conexão embarcada. |
+| `IRIS_PASSWORD` | `SYS` | `app/database/connection.py` | Senha do driver DB-API local. Deve ser substituída fora do ambiente de desenvolvimento. |
+| `IRIS_SQL_SCHEMA` | `IRISPolitical_Model` | repositórios, busca, RAG e ingestão | Schema que qualifica todas as tabelas SQL. Aceita somente identificador alfanumérico iniciado por letra, com `_` opcional. |
+
+No `docker-compose.yml`, somente `IRIS_SQL_SCHEMA` é encaminhada ao container `iris`,
+e atualmente está fixada em `IRISPolitical_Model`. As demais variáveis `IRIS_*` são
+relevantes principalmente ao executar Flask, testes ou scripts Python no host.
+
+#### Fonte TSE
+
+| Variável | Padrão | Onde é utilizada | Efeito |
+|---|---:|---|---|
+| `TSE_CKAN_BASE_URL` | `https://dadosabertos.tse.jus.br/api/3/action` | `app/ingestion/tse/client.py` | Endpoint CKAN usado para descobrir o dataset e seus recursos. O código exige HTTPS e o host oficial do TSE. |
+| `TSE_DATASET_ID` | `candidatos-2026` | cliente TSE e auditoria da ingestão | Identificador consultado em `package_show`; também é gravado nos parâmetros do `IngestionRun`. |
+| `TSE_PORTAL_URL` | portal do dataset de 2026 | somente `app/config/settings.py` | Variável reservada para links de documentação/interface. Não é consumida pela ingestão atual. |
+
+No Compose, somente `TSE_DATASET_ID` é encaminhada ao container `iris`. Alterações em
+`TSE_CKAN_BASE_URL` feitas apenas no `.env` afetam a execução local, mas não o container
+sem uma entrada correspondente em `docker-compose.yml`.
+
+#### API da Câmara e controle de volume
+
+| Variável | Padrão | Onde é utilizada | Efeito |
+|---|---:|---|---|
+| `CAMARA_BASE_URL` | `https://dadosabertos.camara.leg.br/api/v2` | `app/ingestion/camara/client.py` e pipeline | Base dos endpoints de deputados, histórico, mandatos, proposições, autores e temas. O host oficial e HTTPS são obrigatórios. |
+| `CAMARA_MATCH_START_DATE` | `2020-01-01` no `.env.example` | somente `app/config/settings.py` | Configuração legada/reservada. No código atual ela não altera o matching nem a ingestão. |
+| `CAMARA_PAGE_SIZE` | `100` | `app/ingestion/camara/client.py` | Quantidade solicitada por página nas coleções da Câmara; aceita de 1 a 100. |
+| `CAMARA_LOOKBACK_YEARS` | `4` | `app/ingestion/camara/client.py` e pipeline | Calcula uma janela móvel a partir da data da execução. Filtra deputados considerados, histórico, mandatos e proposições. |
+| `CAMARA_MAX_MATCHED_CANDIDATES` | `10` | `app/ingestion/pipeline.py` | Limita quantos candidatos com correspondência recebem ingestão parlamentar detalhada em uma execução. O matching ainda pode ser salvo para outros candidatos. |
+| `CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE` | `50` | `app/ingestion/camara/client.py` | Limita as proposições mais recentes por parlamentar. A API é consultada em janelas de até três meses até atingir esse teto ou os quatro anos. |
+| `CAMARA_MAX_AUTHORS_PER_PROPOSITION` | `10` | `app/ingestion/camara/client.py` | Limita autores/apoiadores persistidos por proposição, priorizando registros marcados como proponentes. |
+
+O Compose encaminha as quatro variáveis de janela e limites. Atualmente não encaminha
+`CAMARA_BASE_URL`, `CAMARA_MATCH_START_DATE` nem `CAMARA_PAGE_SIZE`; dentro do container,
+essas três usam os padrões definidos em `Settings`.
+
+#### Recorte da ingestão e acesso HTTP
+
+| Variável | Padrão | Onde é utilizada | Efeito |
+|---|---:|---|---|
+| `INGEST_ELECTION_YEAR` | `2026` | `app/ingestion/pipeline.py` | Mantém somente candidaturas do ano configurado. |
+| `INGEST_STATES` | `SP` | pipeline TSE | Lista separada por vírgulas de UFs aceitas. Os valores são normalizados para maiúsculas. |
+| `INGEST_OFFICES` | `DEPUTADO FEDERAL,GOVERNADOR` | pipeline TSE | Lista separada por vírgulas dos cargos aceitos. Também é normalizada para maiúsculas. |
+| `HTTP_CONNECT_TIMEOUT_SECONDS` | `10` | `app/ingestion/http.py`, via pipeline | Tempo máximo para estabelecer conexão com TSE ou Câmara. |
+| `HTTP_READ_TIMEOUT_SECONDS` | `60` | `app/ingestion/http.py`, via pipeline | Tempo máximo de espera pela resposta após a conexão. |
+| `HTTP_MAX_RETRIES` | `4` | `app/ingestion/http.py`, via pipeline | Número de tentativas para falhas de conexão, timeout, `429` e erros HTTP transitórios. Aceita de 1 a 10. |
+
+O Compose encaminha `INGEST_ELECTION_YEAR`, `INGEST_STATES` e `INGEST_OFFICES`.
+Os três controles HTTP usam os padrões de `Settings` no container e podem ser alterados
+diretamente quando o pipeline é executado no host.
+
+#### Chunking, embeddings e geração de resposta
+
+| Variável | Padrão | Onde é utilizada | Efeito |
+|---|---:|---|---|
+| `CHUNK_SIZE_TOKENS` | `700` | `app/ingestion/pipeline.py` e `TokenChunker` | Tamanho-alvo de cada chunk em tokens. |
+| `CHUNK_OVERLAP_TOKENS` | `100` | `app/ingestion/pipeline.py` e `TokenChunker` | Sobreposição entre chunks consecutivos. Deve ser menor que `CHUNK_SIZE_TOKENS`. |
+| `EMBEDDING_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente `OpenAIEmbedder`. |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | ingestão, busca vetorial e fábrica de serviços | Modelo usado para tokenização e geração de embeddings. |
+| `EMBEDDING_DIMENSION` | `1536` | embedder e busca vetorial | Deve permanecer em `1536`, igual ao `LEN` de `PoliticalChunk.Embedding` no IRIS. |
+| `LLM_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente o cliente OpenAI. |
+| `LLM_API_KEY` | vazio | ingestão, `/search` e `/ask` | Quando ausente, os chunks são criados sem embeddings e a etapa registra `embedding stage skipped`. Busca vetorial e RAG exigem a chave. |
+| `LLM_MODEL` | `gpt-5-mini` | `app/api/services.py` | Modelo usado pela geração final de resposta no endpoint `/ask`. |
+
+No Compose, `EMBEDDING_MODEL`, `LLM_API_KEY` e `LLM_MODEL` são encaminhadas ao
+container `iris`. As demais usam o padrão de `Settings` dentro do container.
+
+#### API Flask e interface Streamlit
+
+| Variável | Padrão | Onde é utilizada | Efeito |
+|---|---:|---|---|
+| `API_BASE_URL` | `http://localhost:52773/api` | `app/ui/streamlit_app.py` | URL que a interface usa para chamar a API. No Compose, o container `ui` recebe fixamente `http://iris:52773/api`. |
+| `API_HOST` | `0.0.0.0` | `app/api/__main__.py` | Endereço de bind somente ao executar `python -m app.api`. Não controla o WSGI nativo do IRIS. |
+| `API_PORT` | `8000` | `app/api/__main__.py` | Porta do Flask local. Não altera `/api` na porta `52773` do IRIS. |
+
+#### Variáveis internas de imagem e testes
+
+Estas variáveis não fazem parte da configuração funcional do `.env.example`:
+
+| Variável | Definida em | Finalidade |
+|---|---|---|
+| `IRISUSERNAME`, `IRISPASSWORD`, `IRISNAMESPACE` | `Dockerfile`, estágio `iris` | Convenções do runtime/ferramentas do IRIS durante build e execução embarcada. Não são os mesmos nomes `IRIS_USERNAME`, `IRIS_PASSWORD` e `IRIS_NAMESPACE` usados por `Settings`. |
+| `PATH` | `Dockerfile`, estágio `iris` | Disponibiliza `iris`, `irispython` e scripts do usuário no shell do container. |
+| `PYTHONDONTWRITEBYTECODE` | `Dockerfile`, estágio `ui` | Evita arquivos `.pyc` na imagem da interface. |
+| `PYTHONUNBUFFERED` | `Dockerfile`, estágio `ui` | Envia logs Python imediatamente para `docker compose logs`. |
+| `PIP_DISABLE_PIP_VERSION_CHECK` | `Dockerfile`, estágio `ui` | Desativa a verificação de nova versão do `pip` durante o build. |
+| `RUN_IRIS_TESTS` | `tests/test_iris_integration.py` | Quando igual a `1`, habilita testes de integração que acessam um IRIS real. |
+| `RUN_SMOKE_TESTS` | `tests/test_smoke.py` | Quando igual a `1`, habilita smoke tests que exigem o Docker Compose ativo. |
+
+`IRIS_IMAGE` é um argumento de build, não uma variável carregada por `Settings`. Ele
+permite substituir a imagem-base:
+
+```powershell
+docker compose build --build-arg IRIS_IMAGE=intersystems/iris-community:latest-cd
+```
+
 ### Passo 2 — Construir as imagens
 
 Para o primeiro build ou para validar uma alteração estrutural:
