@@ -147,14 +147,26 @@ def _candidate(row: Any) -> Candidate:
         id=int(row[0]),
         tse_id=str(row[1]),
         name=str(row[2]),
-        ballot_name=str(row[3]) if row[3] is not None else None,
-        party=str(row[4]) if row[4] is not None else None,
-        party_number=int(row[5]) if row[5] is not None else None,
+        ballot_name=_optional_str(row[3]),
+        party=_optional_str(row[4]),
+        party_number=_optional_int(row[5]),
         office=str(row[6]),
         state=str(row[7]),
-        candidate_number=int(row[8]) if row[8] is not None else None,
-        camara_deputy_id=int(row[9]) if row[9] is not None else None,
-        match_status=str(row[10]) if row[10] is not None else None,
-        match_confidence=float(row[11]) if row[11] is not None else None,
-        source_url=str(row[12]) if row[12] is not None else None,
+        candidate_number=_optional_int(row[8]),
+        camara_deputy_id=_optional_int(row[9]),
+        match_status=_optional_str(row[10]),
+        match_confidence=_optional_float(row[11]),
+        source_url=_optional_str(row[12]),
     )
+
+
+def _optional_str(value: Any) -> str | None:
+    return str(value) if value not in (None, "") else None
+
+
+def _optional_int(value: Any) -> int | None:
+    return int(value) if value not in (None, "") else None
+
+
+def _optional_float(value: Any) -> float | None:
+    return float(value) if value not in (None, "") else None

@@ -339,7 +339,12 @@ Execute a ingestão dentro do IRIS. Este é o caminho oficial em container:
 docker compose exec iris irispython -m app.ingestion.pipeline
 ```
 
-Aguarde a conclusão. Não interrompa durante gravações no banco.
+Aguarde a conclusão. Não interrompa durante gravações no banco. Por padrão, a etapa
+da Câmara consulta somente os últimos quatro anos e mantém o volume adequado à edição
+Community: até 10 parlamentares correspondentes, 50 proposições por parlamentar e 10
+autores/apoiadores por proposição. Os limites podem ser ajustados por
+`CAMARA_LOOKBACK_YEARS`, `CAMARA_MAX_MATCHED_CANDIDATES`,
+`CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE` e `CAMARA_MAX_AUTHORS_PER_PROPOSITION`.
 
 Depois, confirme:
 

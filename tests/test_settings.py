@@ -33,3 +33,10 @@ def test_settings_reject_vector_dimension_different_from_class() -> None:
 def test_settings_reject_unofficial_source_host() -> None:
     with pytest.raises(ValidationError, match="dadosabertos.tse.jus.br"):
         Settings(**values(), tse_ckan_base_url="https://example.org/api")
+
+
+def test_settings_reject_unbounded_camara_limits() -> None:
+    with pytest.raises(ValidationError):
+        Settings(**values(), camara_max_propositions_per_candidate=0)
+    with pytest.raises(ValidationError):
+        Settings(**values(), camara_max_authors_per_proposition=101)

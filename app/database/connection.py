@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import date, datetime
 from importlib import import_module
 from typing import Any, Protocol, cast
 
 from app.config import Settings
+
+LOGGER = logging.getLogger(__name__)
+IRIS_DATE_EPOCH = date(1840, 12, 31)
 
 
 class _EmbeddedIrisSql(Protocol):
@@ -27,6 +32,24 @@ def _embedded_iris() -> _EmbeddedIrisApi:
     return cast(_EmbeddedIrisApi, import_module("iris"))
 
 
+def _embedded_parameter(value: Any) -> Any:
+    """Convert Python temporal values to formats accepted by IRIS Embedded SQL."""
+    # Embedded Python exposes SQL NULL as the IRIS logical empty string. Passing
+    # Python None directly creates a %SYS.Python object reference instead.
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat(sep=" ", timespec="microseconds")
+    if isinstance(value, date):
+        return (value - IRIS_DATE_EPOCH).days
+    return value
+
+
+def _statement_summary(sql: str) -> str:
+    """Return useful SQL context without logging parameter values."""
+    return " ".join(sql.split())[:160]
+
+
 class EmbeddedIrisCursor:
     def __init__(self, connection: EmbeddedIrisConnection) -> None:
         self.connection = connection
@@ -35,7 +58,17 @@ class EmbeddedIrisCursor:
 
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> None:
         self.connection._ensure_transaction()
-        result = _embedded_iris().sql.exec(sql, *params)
+        normalized = tuple(_embedded_parameter(value) for value in params)
+        try:
+            result = _embedded_iris().sql.exec(sql, *normalized)
+        except Exception:
+            LOGGER.exception(
+                "embedded SQL execution failed sql=%r parameter_types=%s parameter_count=%d",
+                _statement_summary(sql),
+                [type(value).__name__ for value in params],
+                len(params),
+            )
+            raise
         self._rows = iter(result)
         statement = sql.lstrip().partition(" ")[0].upper()
         self.rowcount = -1 if statement in {"SELECT", "WITH"} else 1

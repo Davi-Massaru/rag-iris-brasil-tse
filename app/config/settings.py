@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     camara_base_url: str = "https://dadosabertos.camara.leg.br/api/v2"
     camara_match_start_date: str = "2000-01-01"
     camara_page_size: int = Field(default=100, gt=0, le=100)
+    camara_lookback_years: int = Field(default=4, gt=0, le=20)
+    camara_max_matched_candidates: int = Field(default=10, gt=0, le=100)
+    camara_max_propositions_per_candidate: int = Field(default=50, gt=0, le=1000)
+    camara_max_authors_per_proposition: int = Field(default=10, gt=0, le=100)
 
     ingest_election_year: int = Field(default=2026, gt=2000)
     ingest_states: CsvTuple = ("SP",)

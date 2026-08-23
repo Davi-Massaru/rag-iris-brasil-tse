@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 import requests
 import responses
 
+from app.config import Settings
+from app.ingestion.camara import CamaraClient
 from app.ingestion.camara.contracts import Link
 from app.ingestion.camara.pagination import next_url
 from app.ingestion.http import ExternalContractError, HttpClient
@@ -36,3 +40,52 @@ def test_http_rejects_plain_http_before_request() -> None:
             "http://dadosabertos.camara.leg.br/api/v2/deputados",
             allowed_hosts={"dadosabertos.camara.leg.br"},
         )
+
+
+def test_camara_client_caches_state_search_and_limits_recent_propositions() -> None:
+    class HttpStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict | None]] = []
+
+        def get_json(self, url, *, params=None, allowed_hosts=None):  # noqa: ANN001, ANN201
+            del allowed_hosts
+            self.calls.append((url, params))
+            if url.endswith("/deputados"):
+                return {
+                    "dados": [
+                        {
+                            "id": 178987,
+                            "uri": f"{url}/178987",
+                            "nome": "Orlando Silva",
+                            "siglaUf": "SP",
+                        }
+                    ],
+                    "links": [],
+                }
+            return {
+                "dados": [
+                    {"id": value, "uri": f"{url}/{value}", "dataApresentacao": "2026-01-01"}
+                    for value in (1, 2, 3)
+                ],
+                "links": [],
+            }
+
+    settings = Settings(
+        _env_file=None,
+        camara_max_propositions_per_candidate=2,
+    )
+    http = HttpStub()
+    client = CamaraClient(settings, http)  # type: ignore[arg-type]
+
+    assert client.search_deputies("ORLANDO SILVA", "SP")[0].id == 178987
+    assert client.search_deputies("ORLANDO SILVA", "SP")[0].id == 178987
+    propositions = list(client.propositions(178987))
+
+    deputy_calls = [call for call in http.calls if call[0].endswith("/deputados")]
+    proposition_call = next(call for call in http.calls if call[0].endswith("/proposicoes"))
+    params = proposition_call[1] or {}
+    assert len(deputy_calls) == 1
+    assert len(propositions) == 2
+    assert date.fromisoformat(params["dataFim"]) - date.fromisoformat(params["dataInicio"]) <= (
+        date.resolution * 92
+    )

@@ -4,6 +4,7 @@ import hashlib
 import logging
 import tempfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from app.config import Settings, get_settings
@@ -59,23 +60,39 @@ class IngestionPipeline:
         self.camara = CamaraClient(settings, self.http)
 
     def run(self) -> None:
+        LOGGER.info(
+            "ingestion pipeline started election_year=%d states=%s offices=%s embeddings_enabled=%s",
+            self.settings.ingest_election_year,
+            ",".join(self.settings.ingest_states),
+            ",".join(self.settings.ingest_offices),
+            bool(self.settings.llm_api_key),
+        )
         dataset = self.tse.dataset()
+        LOGGER.info("TSE dataset discovered dataset_id=%s", self.settings.tse_dataset_id)
         with tempfile.TemporaryDirectory(prefix="iris-political-") as directory:
             root = Path(directory)
             self._tse_candidates(dataset, root)
             self._tse_proposals(dataset, root)
         self._camara()
         self._chunks_and_embeddings()
+        LOGGER.info("ingestion pipeline completed")
 
     def _tse_candidates(self, dataset, root: Path) -> None:  # noqa: ANN001
         resource = self.tse.candidate_resource(dataset)
         artifact = self.tse.download(resource, root / "candidates.zip")
         rows = parse_candidates(artifact.path)
+        LOGGER.info(
+            "TSE candidate artifact parsed resource_id=%s rows=%d sha256=%s",
+            resource.id,
+            len(rows),
+            artifact.sha256[:12],
+        )
         with self.factory.connection() as connection:
             runs = IngestionRunRepository(connection, self.settings.iris_sql_schema)
             candidates = CandidateRepository(connection, self.settings.iris_sql_schema)
             run = RunState(runs.start("TSE_CANDIDATES", self._parameters(), artifact.sha256))
             connection.commit()
+            LOGGER.info("ingestion stage started stage=TSE_CANDIDATES run_id=%d", run.id)
             try:
                 for start in range(0, len(rows), 500):
                     with transaction(connection):
@@ -99,6 +116,12 @@ class IngestionPipeline:
                                 to_candidate(raw, resource.url, artifact.collected_at)
                             )
                             self._record(runs, run, result)
+                    LOGGER.info(
+                        "ingestion progress stage=TSE_CANDIDATES run_id=%d processed=%d total=%d",
+                        run.id,
+                        min(start + 500, len(rows)),
+                        len(rows),
+                    )
                 self._finish(runs, run)
                 connection.commit()
             except Exception as exc:
@@ -107,6 +130,7 @@ class IngestionPipeline:
 
     def _tse_proposals(self, dataset, root: Path) -> None:  # noqa: ANN001
         resources = self.tse.proposal_resources(dataset, self.settings.ingest_states)
+        LOGGER.info("TSE proposal resources discovered count=%d", len(resources))
         downloads = [
             self.tse.download(item, root / f"proposal-{index}.zip")
             for index, item in enumerate(resources)
@@ -120,12 +144,18 @@ class IngestionPipeline:
             documents = ProposalDocumentRepository(connection, self.settings.iris_sql_schema)
             run = RunState(runs.start("TSE_PROPOSALS", self._parameters(), source_hash))
             connection.commit()
+            LOGGER.info("ingestion stage started stage=TSE_PROPOSALS run_id=%d", run.id)
             try:
                 for resource, artifact in zip(resources, downloads, strict=True):
+                    resource_records = 0
                     for proposal in read_proposals(artifact.path):
+                        resource_records += 1
                         runs.increment(run.id, "RecordsRead")
                         candidate = candidates.find_by_tse_id(proposal.tse_id)
-                        if candidate is None or not proposal.text:
+                        if candidate is None:
+                            runs.increment(run.id, "RecordsSkipped")
+                            continue
+                        if not proposal.text:
                             run.failures += 1
                             runs.increment(run.id, "RecordsFailed")
                             continue
@@ -143,6 +173,13 @@ class IngestionPipeline:
                         )
                         with transaction(connection):
                             self._record(runs, run, documents.upsert(value))
+                    LOGGER.info(
+                        "TSE proposal artifact processed run_id=%d resource_id=%s records=%d sha256=%s",
+                        run.id,
+                        resource.id,
+                        resource_records,
+                        artifact.sha256[:12],
+                    )
                 self._finish(runs, run)
                 connection.commit()
             except Exception as exc:
@@ -161,8 +198,15 @@ class IngestionPipeline:
             matcher = CandidateMatcher(self.camara, Path("app/ingestion/matching/overrides.json"))
             run = RunState(runs.start("CAMARA", self._parameters()))
             connection.commit()
+            candidates_to_match = candidates.list_for_matching()
+            LOGGER.info(
+                "ingestion stage started stage=CAMARA run_id=%d candidates=%d",
+                run.id,
+                len(candidates_to_match),
+            )
+            ingested_candidates = 0
             try:
-                for candidate in candidates.list_for_matching():
+                for index, candidate in enumerate(candidates_to_match, start=1):
                     runs.increment(run.id, "RecordsRead")
                     match = matcher.match(candidate)
                     with transaction(connection):
@@ -170,6 +214,10 @@ class IngestionPipeline:
                     if match.deputy_id is None:
                         runs.increment(run.id, "RecordsSkipped")
                         continue
+                    if ingested_candidates >= self.settings.camara_max_matched_candidates:
+                        runs.increment(run.id, "RecordsSkipped")
+                        continue
+                    ingested_candidates += 1
                     self._candidate_camara(
                         connection,
                         run,
@@ -181,6 +229,13 @@ class IngestionPipeline:
                         authors,
                         topics,
                     )
+                    if index % 25 == 0 or index == len(candidates_to_match):
+                        LOGGER.info(
+                            "ingestion progress stage=CAMARA run_id=%d processed=%d total=%d",
+                            run.id,
+                            index,
+                            len(candidates_to_match),
+                        )
                 self._finish(runs, run)
                 connection.commit()
             except Exception as exc:
@@ -201,8 +256,27 @@ class IngestionPipeline:
     ) -> None:
         collected = utc_now()
         base = self.settings.camara_base_url.rstrip("/")
-        history_items = self.camara.history(deputy_id)
-        mandates = self.camara.external_mandates(deputy_id)
+        cutoff = self.camara.lookback_start
+        history_items = tuple(
+            item
+            for item in self.camara.history(deputy_id)
+            if item.dataHora and item.dataHora[:10] >= cutoff.isoformat()
+        )
+        mandates = tuple(
+            item
+            for item in self.camara.external_mandates(deputy_id)
+            if _mandate_overlaps(item.anoInicio, item.anoFim, cutoff.year)
+        )
+        LOGGER.info(
+            "Câmara candidate ingestion started candidate_id=%d deputy_id=%d "
+            "histories=%d mandates=%d proposition_limit=%d author_limit=%d",
+            candidate_id,
+            deputy_id,
+            len(history_items),
+            len(mandates),
+            self.settings.camara_max_propositions_per_candidate,
+            self.settings.camara_max_authors_per_proposition,
+        )
         with transaction(connection):
             for history_item in history_items:
                 result = histories.upsert(
@@ -252,9 +326,15 @@ class IngestionPipeline:
                 run.failures += 1
                 with transaction(connection):
                     runs.increment(run.id, "RecordsFailed")
-                LOGGER.exception("proposition ingestion failed", extra={"source_id": summary.id})
+                LOGGER.exception(
+                    "proposition ingestion failed run_id=%d source_id=%d candidate_id=%d",
+                    run.id,
+                    summary.id,
+                    candidate_id,
+                )
 
     def _chunks_and_embeddings(self) -> None:
+        LOGGER.info("chunking stage started")
         with self.factory.connection() as connection:
             schema = self.settings.iris_sql_schema
             chunk_repo = PoliticalChunkRepository(connection, schema)
@@ -270,27 +350,48 @@ class IngestionPipeline:
                 PropositionAuthorRepository(connection, schema),
                 PropositionTopicRepository(connection, schema),
             )
-            for row in proposition_repo.list_for_chunks():
+            proposition_rows = proposition_repo.list_for_chunks()
+            document_rows = document_repo.list_for_chunks()
+            history_rows = history_repo.list_for_chunks()
+            LOGGER.info(
+                "chunk sources loaded propositions=%d documents=%d histories=%d",
+                len(proposition_rows),
+                len(document_rows),
+                len(history_rows),
+            )
+            for row in proposition_rows:
                 with transaction(connection):
                     chunk_repo.replace_source(builder.proposition(row))
-            for row in document_repo.list_for_chunks():
+            for row in document_rows:
                 chunks = builder.document(row)
                 if chunks:
                     with transaction(connection):
                         chunk_repo.replace_source(chunks)
-            for row in history_repo.list_for_chunks():
+            for row in history_rows:
                 with transaction(connection):
                     chunk_repo.replace_source(builder.history(row))
+            pending = chunk_repo.without_embedding()
+            if not self.settings.llm_api_key:
+                LOGGER.warning(
+                    "embedding stage skipped reason=missing_llm_api_key pending_chunks_in_batch=%d",
+                    len(pending),
+                )
+                return
             embedder = OpenAIEmbedder(
                 self.settings.llm_api_key,
                 self.settings.embedding_model,
                 self.settings.embedding_dimension,
             )
-            while pending := chunk_repo.without_embedding():
+            embedded = 0
+            while pending:
                 for chunk in pending:
                     vector = embedder.embed(chunk.content)
                     with transaction(connection):
                         chunk_repo.update_embedding(chunk.id, vector, embedder.model)
+                    embedded += 1
+                LOGGER.info("embedding progress embedded=%d", embedded)
+                pending = chunk_repo.without_embedding()
+            LOGGER.info("chunking and embedding stages completed embedded=%d", embedded)
 
     def _parameters(self) -> dict:
         return {
@@ -299,6 +400,14 @@ class IngestionPipeline:
             "offices": self.settings.ingest_offices,
             "datasetId": self.settings.tse_dataset_id,
             "pageSize": self.settings.camara_page_size,
+            "camaraLookbackYears": self.settings.camara_lookback_years,
+            "camaraMaxMatchedCandidates": self.settings.camara_max_matched_candidates,
+            "camaraMaxPropositionsPerCandidate": (
+                self.settings.camara_max_propositions_per_candidate
+            ),
+            "camaraMaxAuthorsPerProposition": (
+                self.settings.camara_max_authors_per_proposition
+            ),
         }
 
     @staticmethod
@@ -322,16 +431,37 @@ class IngestionPipeline:
             else "SUCCESS"
         )
         runs.finish(state.id, status)
+        LOGGER.info(
+            "ingestion stage completed run_id=%d status=%s successes=%d failures=%d",
+            state.id,
+            status,
+            state.successes,
+            state.failures,
+        )
 
     @staticmethod
     def _fail(runs: IngestionRunRepository, state: RunState, exc: Exception, connection) -> None:  # noqa: ANN001
         connection.rollback()
         runs.finish(state.id, "FAILED", str(exc))
         connection.commit()
+        LOGGER.exception(
+            "ingestion stage failed run_id=%d error_type=%s",
+            state.id,
+            type(exc).__name__,
+        )
+
+
+def _mandate_overlaps(start_year: str | None, end_year: str | None, cutoff_year: int) -> bool:
+    if start_year and start_year.isdigit() and int(start_year) > date.today().year:
+        return False
+    return not (end_year and end_year.isdigit() and int(end_year) < cutoff_year)
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     IngestionPipeline(get_settings()).run()
 
 
