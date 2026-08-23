@@ -10,6 +10,8 @@ ENV IRISUSERNAME=_SYSTEM \
 
 COPY merge.cpf iris.script module.xml ./
 COPY iris ./iris
+COPY app ./app
+COPY wsgi_app.py requirements-api.txt ./
 
 USER root
 RUN mkdir -p /data/IRISAPP_DATA/irisapp_dataenstemp \
@@ -20,19 +22,28 @@ USER irisowner
 RUN iris start IRIS \
     && iris merge iris ./merge.cpf \
     && iris session IRIS < iris.script | tee /tmp/iris-load.log \
-    && ! grep -q "ERROR #" /tmp/iris-load.log \
+    && ! grep -Eiq '(<SYNTAX>|<NOROUTINE>|ERROR|FAILURE)' /tmp/iris-load.log \
     && iris stop IRIS quietly
 
-FROM python:3.12-slim AS app
+# Install application packages after IPM so its bundled Python dependencies
+# cannot leave older package metadata ahead of the API requirements.
+USER root
+RUN python3 -m pip install --no-cache-dir --upgrade \
+    --target /usr/irissys/mgr/python \
+    -r requirements-api.txt \
+    && python3 -m pip check
+USER irisowner
+
+FROM python:3.12-slim AS ui
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /opt/iris-political
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-ui.txt ./
+RUN pip install --no-cache-dir -r requirements-ui.txt
 COPY app ./app
 
-EXPOSE 8000 8501
-CMD ["waitress-serve", "--call", "--listen=0.0.0.0:8000", "app.api.app:create_app"]
+EXPOSE 8501
+CMD ["streamlit", "run", "app/ui/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]

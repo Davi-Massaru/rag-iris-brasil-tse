@@ -6,8 +6,29 @@
       <Version>1.0.0</Version>
       <Description>Dados políticos oficiais, busca híbrida e RAG no InterSystems IRIS</Description>
       <Packaging>module</Packaging>
+      <SystemRequirements Version=">=2025.1" IPMVersion=">=0.10.9"/>
       <SourcesRoot>iris</SourcesRoot>
-      <Resource Name="IRISPolitical.PKG"/>
+      <Resource Name="IRISPolitical.Model.Candidate.CLS"/>
+      <Resource Name="IRISPolitical.Model.IngestionRun.CLS"/>
+      <Resource Name="IRISPolitical.Model.PoliticalChunk.CLS"/>
+      <Resource Name="IRISPolitical.Model.PoliticalHistory.CLS"/>
+      <Resource Name="IRISPolitical.Model.ProposalDocument.CLS"/>
+      <Resource Name="IRISPolitical.Model.Proposition.CLS"/>
+      <Resource Name="IRISPolitical.Model.PropositionAuthor.CLS"/>
+      <Resource Name="IRISPolitical.Model.PropositionTopic.CLS"/>
+      <FileCopy Name="app/" Target="${libdir}iris-political-insight/app/"/>
+      <FileCopy Name="wsgi_app.py" Target="${libdir}iris-political-insight/"/>
+      <WebApplication
+        Url="/api"
+        NameSpace="${ns}"
+        Description="IRIS Political Insight Flask API"
+        AutheEnabled="64"
+        MatchRoles=":%All"
+        WSGIAppLocation="${libdir}iris-political-insight/"
+        WSGIAppName="wsgi_app"
+        WSGICallable="app"
+        DispatchClass="%SYS.Python.WSGI"
+      />
     </Module>
   </Document>
 </Export>

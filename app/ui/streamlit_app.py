@@ -6,7 +6,7 @@ from typing import Any
 import requests
 import streamlit as st
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:52773/api").rstrip("/")
 REQUEST_TIMEOUT = (5, 120)
 
 

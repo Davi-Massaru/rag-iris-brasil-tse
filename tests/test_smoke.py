@@ -15,7 +15,7 @@ pytestmark = [
 
 
 def test_api_health() -> None:
-    response = requests.get("http://localhost:8000/health", timeout=10)
+    response = requests.get("http://localhost:52773/api/health", timeout=10)
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}

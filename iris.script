@@ -1,7 +1,14 @@
-    zn "%SYS"
-    do ##class(Security.Users).UnExpireUserPasswords("*")
+zn "%SYS"
+do ##class(Security.Users).UnExpireUserPasswords("*")
 
-    zn "IRISAPP"
-    set sc=$SYSTEM.OBJ.LoadDir("/home/irisowner/dev/iris","ck",,1)
-    if 'sc write $SYSTEM.Status.GetErrorText(sc),!
-    halt
+zn "IRISAPP"
+set version="0.10.9"
+set request=##class(%Net.HttpRequest).%New()
+set request.Server="pm.community.intersystems.com"
+set request.SSLConfiguration="ISC.FeatureTracker.SSL.Config"
+set sc=request.Get("/packages/zpm/"_version_"/installer")
+if 'sc write "ERROR: IPM download failed: "_$system.Status.GetErrorText(sc),! halt
+set sc=$system.OBJ.LoadStream(request.HttpResponse.Data,"ck")
+if 'sc write "ERROR: IPM install failed: "_$system.Status.GetErrorText(sc),! halt
+zpm "load -bypass-py-deps /home/irisowner/dev"
+halt

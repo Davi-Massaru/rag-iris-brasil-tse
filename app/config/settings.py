@@ -19,11 +19,11 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    iris_host: str
+    iris_host: str = "localhost"
     iris_port: int = Field(default=1972, gt=0, le=65535)
-    iris_namespace: str
-    iris_username: str
-    iris_password: str
+    iris_namespace: str = "IRISAPP"
+    iris_username: str = "_SYSTEM"
+    iris_password: str = "SYS"
     iris_sql_schema: str = "IRISPolitical_Model"
 
     tse_ckan_base_url: str = "https://dadosabertos.tse.jus.br/api/3/action"
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None
     llm_model: str = "gpt-5-mini"
 
-    api_base_url: str = "http://localhost:8000"
+    api_base_url: str = "http://localhost:52773/api"
     api_host: str = "0.0.0.0"
     api_port: int = Field(default=8000, gt=0, le=65535)
 

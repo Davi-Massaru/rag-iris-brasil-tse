@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
 import pytest
 
-from app.database import transaction
+from app.config import Settings
+from app.database import IrisConnectionFactory, transaction
 
 pytestmark = pytest.mark.unit
 
@@ -37,3 +41,66 @@ def test_transaction_rolls_back_and_reraises() -> None:
 
     assert connection.commits == 0
     assert connection.rollbacks == 1
+
+
+def test_connection_factory_uses_embedded_iris_without_tcp(monkeypatch) -> None:  # noqa: ANN001
+    state = {"level": 0, "commits": 0, "rollbacks": 0}
+
+    class Result(list):
+        rowcount = 1
+
+    def tstart() -> None:
+        state["level"] += 1
+
+    def tcommit() -> None:
+        state["level"] -= 1
+        state["commits"] += 1
+
+    def trollbackone() -> None:
+        state["level"] -= 1
+        state["rollbacks"] += 1
+
+    embedded_iris = SimpleNamespace(
+        sql=SimpleNamespace(exec=lambda _sql, *_params: Result([[1]])),
+        tstart=tstart,
+        tcommit=tcommit,
+        trollbackone=trollbackone,
+    )
+    monkeypatch.setitem(sys.modules, "iris", embedded_iris)
+
+    connection = IrisConnectionFactory(Settings(_env_file=None)).connect()
+    cursor = connection.cursor()
+    cursor.execute("SELECT 1")
+
+    assert cursor.fetchone() == [1]
+    assert cursor.rowcount == -1
+    assert state["level"] == 1
+
+    connection.commit()
+    connection.close()
+
+    assert state == {"level": 0, "commits": 1, "rollbacks": 0}
+
+
+def test_embedded_cursor_treats_iris_eof_as_end_of_result(monkeypatch) -> None:  # noqa: ANN001
+    class EmptyResult:
+        def __iter__(self):  # noqa: ANN204
+            return self
+
+        def __next__(self):  # noqa: ANN204
+            raise EOFError
+
+    embedded_iris = SimpleNamespace(
+        sql=SimpleNamespace(exec=lambda _sql, *_params: EmptyResult()),
+        tstart=lambda: None,
+        tcommit=lambda: None,
+        trollbackone=lambda: None,
+    )
+    monkeypatch.setitem(sys.modules, "iris", embedded_iris)
+
+    connection = IrisConnectionFactory(Settings(_env_file=None)).connect()
+    cursor = connection.cursor()
+    cursor.execute("SELECT 1 WHERE 1 = 0")
+
+    assert cursor.fetchone() is None
+    assert cursor.fetchall() == []
