@@ -26,7 +26,12 @@ def candidate_options() -> tuple[list[str], dict[str, int | None]]:
     values = api_get("/candidates").get("items", [])
     mapping: dict[str, int | None] = {"Todos os candidatos": None}
     for item in values:
-        label = f"{item['name']} — {item.get('party') or 'sem partido'} / {item['state']}"
+        identity = item.get("ballot_name") or item["name"]
+        number = f" · nº {item['candidate_number']}" if item.get("candidate_number") else ""
+        label = (
+            f"{identity} — {item['office']} — "
+            f"{item.get('party') or 'sem partido'} / {item['state']}{number}"
+        )
         mapping[label] = int(item["id"])
     return list(mapping), mapping
 
@@ -35,8 +40,20 @@ def render_sources(sources: list[dict[str, Any]]) -> None:
     if not sources:
         return
     st.subheader("Fontes")
-    for source in sources:
-        with st.expander(source.get("title") or "Fonte"):
+    for position, source in enumerate(sources, 1):
+        evidence_id = source.get("evidenceId") or f"E{position}"
+        title = source.get("title") or "Fonte"
+        with st.expander(f"[{evidence_id}] {title}"):
+            metadata = source.get("metadata") or {}
+            details = [source.get("sourceType")]
+            if metadata.get("fileName"):
+                details.append(metadata["fileName"])
+            if metadata.get("pageStart"):
+                pages = str(metadata["pageStart"])
+                if metadata.get("pageEnd") and metadata["pageEnd"] != metadata["pageStart"]:
+                    pages += f"–{metadata['pageEnd']}"
+                details.append(f"página(s) {pages}")
+            st.caption(" · ".join(str(item) for item in details if item))
             st.write(source.get("content", ""))
             if source.get("sourceUrl"):
                 st.link_button("Abrir fonte oficial", source["sourceUrl"])
@@ -61,6 +78,12 @@ def main() -> None:
         try:
             with st.spinner("Consultando as fontes..."):
                 result = api_post("/ask", payload)
+            candidate = result.get("candidate")
+            if candidate:
+                st.caption(
+                    f"Resposta sobre {candidate['name']} — "
+                    f"{candidate.get('party') or 'sem partido'} / {candidate['state']}"
+                )
             st.markdown(result["answer"])
             render_sources(result.get("sources", []))
         except requests.RequestException as exc:

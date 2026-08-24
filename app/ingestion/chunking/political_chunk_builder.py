@@ -69,7 +69,12 @@ class PoliticalChunkBuilder:
             str(raw_text or ""),
             str(url),
             collected,
-            {"electionYear": year, "resourceId": resource_id, "fileName": file_name},
+            {
+                "electionYear": year,
+                "resourceId": resource_id,
+                "fileName": file_name,
+                "documentHash": document_hash,
+            },
         )
 
     def history(self, row: tuple) -> tuple[ChunkWrite, ...]:
@@ -122,6 +127,7 @@ class PoliticalChunkBuilder:
         collected_at: datetime | None,
         metadata: dict,
     ) -> tuple[ChunkWrite, ...]:
+        _validate_source_text(text, source_type, source_id)
         chunks = self.chunker.split(text)
         return tuple(
             ChunkWrite(
@@ -150,3 +156,14 @@ def _year(value) -> str:  # noqa: ANN001
 def _pages(text: str) -> dict[str, int]:
     pages = [int(value) for value in re.findall(r"\[Página (\d+)\]", text)]
     return {"pageStart": min(pages), "pageEnd": max(pages)} if pages else {}
+
+
+def _validate_source_text(text: str, source_type: str, source_id: str) -> None:
+    if not text.strip():
+        raise ValueError(f"empty chunk source: {source_type}/{source_id}")
+    markers = ("%Stream.GlobalCharacter", "^IRISPoliti")
+    if any(marker in text for marker in markers):
+        raise ValueError(f"unmaterialized IRIS stream: {source_type}/{source_id}")
+    invalid_controls = [char for char in text if ord(char) < 32 and char not in "\n\r\t"]
+    if invalid_controls:
+        raise ValueError(f"control characters in chunk source: {source_type}/{source_id}")

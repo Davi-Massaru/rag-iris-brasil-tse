@@ -80,21 +80,25 @@ def mandate_write(
 def proposition_write(
     candidate_id: int, item: PropositionDetail, collected_at: datetime
 ) -> PropositionWrite:
+    presentation_date = _iso_date(item.dataApresentacao)
+    year = item.ano if item.ano and item.ano > 0 else None
+    if year is None and presentation_date is not None:
+        year = presentation_date.year
     parts = [item.siglaTipo, str(item.numero) if item.numero is not None else None]
     title = " ".join(part for part in parts if part)
-    if item.ano is not None:
-        title = f"{title}/{item.ano}" if title else str(item.ano)
+    if year is not None:
+        title = f"{title}/{year}" if title else str(year)
     status = item.statusProposicao
     return PropositionWrite(
         candidate_id=candidate_id,
         camara_id=item.id,
         type=item.siglaTipo,
         number=item.numero,
-        year=item.ano,
+        year=year,
         title=title,
         summary=item.ementa,
         detailed_summary=item.ementaDetalhada,
-        presentation_date=_iso_date(item.dataApresentacao),
+        presentation_date=presentation_date,
         status=(status.descricaoSituacao or status.descricaoTramitacao) if status else None,
         source_url=item.uri,
         collected_at=collected_at,

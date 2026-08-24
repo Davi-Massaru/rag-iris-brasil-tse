@@ -7,5 +7,4 @@
 .env
 .venv
 iris-main.log
-tests
 docs

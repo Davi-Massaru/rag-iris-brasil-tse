@@ -55,7 +55,7 @@ Index CandidateSourceTypeIDX On (Candidate, SourceType);
 Index SourceIDX On (SourceType, SourceId);
 
 Index SourceChunkUniqueIDX On
-    (SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
+    (Candidate, SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
 
 Index ContentHashIDX On ContentHash;
 

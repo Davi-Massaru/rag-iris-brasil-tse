@@ -52,10 +52,12 @@ class Settings(BaseSettings):
     embedding_provider: str = "openai"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
+    embedding_batch_size: int = Field(default=50, gt=0, le=100)
 
     llm_provider: str = "openai"
     llm_api_key: str | None = None
     llm_model: str = "gpt-5-mini"
+    llm_max_output_tokens: int = Field(default=1_800, ge=256, le=8_000)
 
     api_base_url: str = "http://localhost:52773/api"
     api_host: str = "0.0.0.0"

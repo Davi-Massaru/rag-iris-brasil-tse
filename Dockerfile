@@ -47,3 +47,18 @@ COPY app ./app
 
 EXPOSE 8501
 CMD ["streamlit", "run", "app/ui/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
+
+FROM python:3.12-slim AS test
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /opt/iris-political
+
+COPY requirements.txt requirements-api.txt requirements-ui.txt requirements-dev.txt pyproject.toml ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY app ./app
+COPY tests ./tests
+COPY wsgi_app.py ./wsgi_app.py
+
+CMD ["python", "-m", "pytest", "-m", "unit", "-p", "no:cacheprovider"]

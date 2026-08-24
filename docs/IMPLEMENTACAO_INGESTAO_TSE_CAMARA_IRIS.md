@@ -978,7 +978,7 @@ O repository usa `SELECT ID` seguido de `INSERT` ou `UPDATE` dentro da mesma tra
 | `PropositionAuthor` | `Proposition + Uri` ou nome normalizado | consulta do repository |
 | `PropositionTopic` | `Proposition + Name` | índice único |
 | `ProposalDocument` | `Candidate + DocumentHash` | índice único |
-| `PoliticalChunk` | `SourceType + SourceId + ChunkIndex + ContentHash` | índice único |
+| `PoliticalChunk` | `Candidate + SourceType + SourceId + ChunkIndex + ContentHash` | índice único |
 
 Exemplo lógico para `Candidate`:
 
@@ -1129,10 +1129,10 @@ content_hash = sha256(
 Chave:
 
 ```text
-SourceType + SourceId + ChunkIndex + ContentHash
+Candidate + SourceType + SourceId + ChunkIndex + ContentHash
 ```
 
-Se o conteúdo mudar, o novo hash produz um novo chunk. Antes da inserção dos chunks atuais de uma origem, o repository remove apenas chunks obsoletos da mesma combinação `SourceType + SourceId` que não estejam no novo conjunto de hashes. A remoção acontece na mesma transação da inserção do novo conjunto.
+Se o conteúdo mudar, o novo hash produz um novo chunk. Antes da inserção dos chunks atuais de uma origem, o repository remove apenas chunks obsoletos da mesma combinação `Candidate + SourceType + SourceId` que não estejam no novo conjunto de hashes. A remoção acontece na mesma transação da inserção do novo conjunto.
 
 ### 17.6 Embedding
 

@@ -135,6 +135,20 @@ A busca lexical atual carrega do IRIS os chunks compatíveis com os filtros e ca
 
 Cada mecanismo retorna até 20 resultados. O RRF combina as posições com `k = 60`, sem tentar comparar diretamente escalas incompatíveis de pontuação, e entrega por padrão as 8 evidências mais bem posicionadas.
 
+Antes dos rankings, um planejador determinístico classifica somente as intenções que
+possuem tratamento confiável sem uma chamada adicional ao LLM:
+
+- resumo de plano de governo: amostra distribuída entre o início, o meio e o fim dos
+  chunks do documento;
+- tema específico do plano: Hybrid Search filtrada por `GOVERNMENT_PROPOSAL`;
+- temas mais frequentes: contagem SQL em `PropositionTopic`;
+- histórico parlamentar: Hybrid Search filtrada por `POLITICAL_HISTORY`;
+- proposições: Hybrid Search filtrada por `PROPOSITION`;
+- demais perguntas: Hybrid Search geral.
+
+Assim, SQL resolve agregações determinísticas, cobertura documental resolve resumos
+longos e o modelo de linguagem permanece responsável apenas pela síntese fundamentada.
+
 ```mermaid
 flowchart LR
     Q["Consulta"] --> L["Lexical: frase e termos"]
@@ -149,9 +163,13 @@ flowchart LR
 
 ### 6. Prompt e geração da resposta
 
-O serviço RAG recebe as evidências recuperadas e constrói blocos identificados como `[E1]`, `[E2]` e assim por diante. Cada bloco inclui título, tipo, URL oficial e trecho. As instruções do modelo exigem uso exclusivo das evidências, proíbem recomendação de voto e classificação ideológica e determinam que insuficiência de contexto seja declarada explicitamente.
+O serviço RAG recebe as evidências recuperadas e constrói blocos identificados como `[E1]`, `[E2]` e assim por diante. Cada bloco inclui a identidade autoritativa do candidato selecionado, título, tipo, URL oficial, metadados e trecho. As instruções do modelo exigem uso exclusivo das evidências, proíbem inferir o candidato pela lista de autores, recomendação de voto e classificação ideológica e determinam que insuficiência de contexto seja declarada explicitamente.
 
-Se a busca não retornar evidências, o LLM nem é chamado. A API devolve a mensagem de insuficiência e uma lista vazia de fontes. Quando há contexto, `/ask` retorna a resposta e todas as fontes utilizadas no prompt.
+Referências internas de stream, caracteres de controle e evidências vazias são rejeitados
+antes da geração. Se a busca não retornar evidências válidas, o LLM nem é chamado. A
+geração usa uma única chamada à Responses API, não armazena a resposta no provedor e
+limita a saída. A API retorna somente as fontes citadas na resposta, mantendo os mesmos
+identificadores exibidos na interface.
 
 ## Aderência ao concurso
 
@@ -300,12 +318,15 @@ diretamente quando o pipeline é executado no host.
 | `EMBEDDING_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente `OpenAIEmbedder`. |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | ingestão, busca vetorial e fábrica de serviços | Modelo usado para tokenização e geração de embeddings. |
 | `EMBEDDING_DIMENSION` | `1536` | embedder e busca vetorial | Deve permanecer em `1536`, igual ao `LEN` de `PoliticalChunk.Embedding` no IRIS. |
+| `EMBEDDING_BATCH_SIZE` | `50` | reconstrução do índice | Quantidade de chunks enviada por chamada de embeddings; reduz requisições sem alterar a granularidade persistida. |
 | `LLM_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente o cliente OpenAI. |
-| `LLM_API_KEY` | vazio | ingestão, `/search` e `/ask` | Quando ausente, os chunks são criados sem embeddings e a etapa registra `embedding stage skipped`. Busca vetorial e RAG exigem a chave. |
+| `LLM_API_KEY` | vazio | ingestão, busca vetorial e `/ask` | Quando ausente, os chunks são preservados e o run `RAG_INDEX` fica `PARTIAL`, com a quantidade exata de embeddings pendentes. Consultas de cobertura documental e agregações SQL continuam locais. |
 | `LLM_MODEL` | `gpt-5-mini` | `app/api/services.py` | Modelo usado pela geração final de resposta no endpoint `/ask`. |
+| `LLM_MAX_OUTPUT_TOKENS` | `1800` | `app/rag/service.py` | Limite explícito da única chamada de geração feita por pergunta. |
 
-No Compose, `EMBEDDING_MODEL`, `LLM_API_KEY` e `LLM_MODEL` são encaminhadas ao
-container `iris`. As demais usam o padrão de `Settings` dentro do container.
+No Compose, `EMBEDDING_MODEL`, `EMBEDDING_BATCH_SIZE`, `LLM_API_KEY`, `LLM_MODEL` e
+`LLM_MAX_OUTPUT_TOKENS` são encaminhadas ao container `iris`. As demais usam o padrão
+de `Settings` dentro do container.
 
 #### API Flask e interface Streamlit
 
@@ -411,6 +432,36 @@ Critério: HTTP `200` e corpo `{"status":"ok"}`.
 
 ```powershell
 Invoke-RestMethod http://localhost:52773/api/candidates
+```
+
+### Reconstruir somente o índice RAG
+
+Quando os dados relacionais e os textos das fontes já estiverem no IRIS, reconstrua
+chunks e embeddings sem baixar novamente TSE/Câmara:
+
+```powershell
+docker compose exec -T iris irispython -m app.ingestion.chunk_index
+```
+
+A execução é auditada em `IngestionRun` com `Source = RAG_INDEX`. Streams são
+materializados por SQL antes do chunking e os embeddings pendentes são enviados em
+lotes configurados por `EMBEDDING_BATCH_SIZE`.
+
+Validação mínima após a reconstrução:
+
+```sql
+SELECT SourceType, COUNT(*), MIN(TokenCount), MAX(TokenCount)
+FROM IRISPolitical_Model.PoliticalChunk
+GROUP BY SourceType;
+
+SELECT COUNT(*) AS InvalidStreams
+FROM IRISPolitical_Model.PoliticalChunk
+WHERE Content %CONTAINS '%Stream.GlobalCharacter';
+
+SELECT TOP 10 Source, Status, RecordsRead, RecordsCreated,
+       RecordsUpdated, RecordsSkipped, RecordsFailed
+FROM IRISPolitical_Model.IngestionRun
+ORDER BY ID DESC;
 ```
 
 Resultado mínimo esperado:

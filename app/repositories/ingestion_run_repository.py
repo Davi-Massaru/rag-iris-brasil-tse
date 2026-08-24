@@ -9,7 +9,7 @@ from .base import RepositorySupport
 
 class IngestionRunRepository(RepositorySupport):
     def start(self, source: str, parameters: dict, source_hash: str | None = None) -> int:
-        if source not in {"TSE_CANDIDATES", "TSE_PROPOSALS", "CAMARA"}:
+        if source not in {"TSE_CANDIDATES", "TSE_PROPOSALS", "CAMARA", "RAG_INDEX"}:
             raise ValueError("invalid ingestion source")
         self.execute(
             f"""INSERT INTO {self.table("IngestionRun")}

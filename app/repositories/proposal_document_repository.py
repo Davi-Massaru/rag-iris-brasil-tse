@@ -4,6 +4,8 @@ from app.domain import ProposalDocumentWrite, UpsertResult, utc_now
 
 from .base import RepositorySupport
 
+STREAM_READ_SIZE = 30_000
+
 
 class ProposalDocumentRepository(RepositorySupport):
     def upsert(self, value: ProposalDocumentWrite) -> UpsertResult:
@@ -51,7 +53,38 @@ class ProposalDocumentRepository(RepositorySupport):
         return UpsertResult(int(inserted[0]), "INSERTED")
 
     def list_for_chunks(self) -> list[tuple]:
-        return self.all(
+        rows = self.all(
             f"""SELECT ID,Candidate,ElectionYear,Title,SourceUrl,SourceResourceId,FileName,
-            DocumentHash,RawText,SourceCollectedAt FROM {self.table("ProposalDocument")} ORDER BY ID"""
+            DocumentHash,CHAR_LENGTH(RawText),SourceCollectedAt
+            FROM {self.table("ProposalDocument")} ORDER BY ID"""
         )
+        return [
+            (*row[:8], self._read_raw_text(int(row[0]), int(row[8] or 0)), row[9]) for row in rows
+        ]
+
+    def _read_raw_text(self, document_id: int, expected_length: int) -> str:
+        """Materialize an IRIS character stream through portable SQL fragments.
+
+        Embedded SQL returns a serialized stream reference when a stream column is
+        selected directly. SUBSTRING dereferences the stream and works in both the
+        Embedded Python and DB-API adapters.
+        """
+        if expected_length <= 0:
+            return ""
+        parts: list[str] = []
+        for start in range(1, expected_length + 1, STREAM_READ_SIZE):
+            row = self.one(
+                f"""SELECT SUBSTRING(RawText,?,?)
+                FROM {self.table("ProposalDocument")} WHERE ID=?""",
+                (start, STREAM_READ_SIZE, document_id),
+            )
+            if row is None:
+                raise RuntimeError(f"proposal document {document_id} disappeared during read")
+            parts.append(str(row[0] or ""))
+        content = "".join(parts)
+        if len(content) != expected_length:
+            raise RuntimeError(
+                f"proposal document {document_id} stream length mismatch: "
+                f"expected {expected_length}, got {len(content)}"
+            )
+        return content

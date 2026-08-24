@@ -18,10 +18,21 @@ class OpenAIEmbedder:
         self.dimension = dimension
 
     def embed(self, text: str) -> list[float]:
+        return self.embed_many((text,))[0]
+
+    def embed_many(self, texts: tuple[str, ...] | list[str]) -> list[list[float]]:
+        if not texts:
+            return []
         response = self.client.embeddings.create(
-            model=self.model, input=text, dimensions=self.dimension
+            model=self.model, input=list(texts), dimensions=self.dimension
         )
-        vector = list(response.data[0].embedding)
-        if len(vector) != self.dimension:
-            raise ValueError(f"embedding dimension mismatch: {len(vector)}")
-        return vector
+        ordered = sorted(response.data, key=lambda item: item.index)
+        vectors = [list(item.embedding) for item in ordered]
+        if len(vectors) != len(texts):
+            raise ValueError(
+                f"embedding batch size mismatch: expected {len(texts)}, got {len(vectors)}"
+            )
+        for vector in vectors:
+            if len(vector) != self.dimension:
+                raise ValueError(f"embedding dimension mismatch: {len(vector)}")
+        return vectors

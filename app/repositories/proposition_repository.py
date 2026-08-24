@@ -74,3 +74,22 @@ class PropositionRepository(RepositorySupport):
             f"""SELECT ID,Candidate,CamaraId,Title,Summary,DetailedSummary,Status,SourceUrl,
             SourceCollectedAt FROM {self.table("Proposition")} ORDER BY ID"""
         )
+
+    def repair_invalid_years(self) -> int:
+        rows = self.all(
+            f"""SELECT ID,Type,Number,YEAR(PresentationDate)
+            FROM {self.table("Proposition")}
+            WHERE (Year IS NULL OR Year<=0) AND PresentationDate IS NOT NULL"""
+        )
+        repaired = 0
+        for proposition_id, proposition_type, number, year in rows:
+            parts = [str(proposition_type or "").strip(), str(number) if number is not None else ""]
+            stem = " ".join(part for part in parts if part)
+            title = f"{stem}/{int(year)}" if stem else str(int(year))
+            self.execute(
+                f"""UPDATE {self.table("Proposition")}
+                SET Year=?,Title=?,UpdatedAt=? WHERE ID=?""",
+                (int(year), title, utc_now(), int(proposition_id)),
+            )
+            repaired += 1
+        return repaired

@@ -190,6 +190,9 @@ def test_streams_and_ingestion_audit(connection) -> None:  # noqa: ANN001
         document_row = documents.one(
             f"SELECT RawText FROM {schema}.ProposalDocument WHERE ID=?", (document.id,)
         )
+        document_source = next(
+            row for row in documents.list_for_chunks() if int(row[0]) == document.id
+        )
         run_row = runs.one(
             f"SELECT Status,RecordsRead,RecordsCreated FROM {schema}.IngestionRun WHERE ID=?",
             (run_id,),
@@ -197,6 +200,7 @@ def test_streams_and_ingestion_audit(connection) -> None:  # noqa: ANN001
 
         assert "Integração" in str(history_row[0])
         assert "Educação pública" in str(document_row[0])
+        assert document_source[8] == "[Página 1]\nEducação pública com tecnologia."
         assert tuple(run_row) == ("SUCCESS", 2, 1)
     finally:
         cursor = connection.cursor()

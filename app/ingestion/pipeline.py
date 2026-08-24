@@ -10,7 +10,6 @@ from pathlib import Path
 from app.config import Settings, get_settings
 from app.database import IrisConnectionFactory, transaction
 from app.domain import ProposalDocumentWrite, UpsertResult, utc_now
-from app.embeddings import OpenAIEmbedder
 from app.ingestion.camara import CamaraClient
 from app.ingestion.camara.mapper import (
     author_write,
@@ -19,7 +18,7 @@ from app.ingestion.camara.mapper import (
     proposition_write,
     topic_write,
 )
-from app.ingestion.chunking import PoliticalChunkBuilder, TokenChunker
+from app.ingestion.chunk_index import ChunkIndexPipeline
 from app.ingestion.http import HttpClient
 from app.ingestion.matching import CandidateMatcher
 from app.ingestion.tse import TseClient
@@ -29,7 +28,6 @@ from app.ingestion.tse.proposal_reader import read_proposals
 from app.repositories import (
     CandidateRepository,
     IngestionRunRepository,
-    PoliticalChunkRepository,
     PoliticalHistoryRepository,
     ProposalDocumentRepository,
     PropositionAuthorRepository,
@@ -334,64 +332,8 @@ class IngestionPipeline:
                 )
 
     def _chunks_and_embeddings(self) -> None:
-        LOGGER.info("chunking stage started")
-        with self.factory.connection() as connection:
-            schema = self.settings.iris_sql_schema
-            chunk_repo = PoliticalChunkRepository(connection, schema)
-            proposition_repo = PropositionRepository(connection, schema)
-            history_repo = PoliticalHistoryRepository(connection, schema)
-            document_repo = ProposalDocumentRepository(connection, schema)
-            builder = PoliticalChunkBuilder(
-                TokenChunker(
-                    self.settings.embedding_model,
-                    self.settings.chunk_size_tokens,
-                    self.settings.chunk_overlap_tokens,
-                ),
-                PropositionAuthorRepository(connection, schema),
-                PropositionTopicRepository(connection, schema),
-            )
-            proposition_rows = proposition_repo.list_for_chunks()
-            document_rows = document_repo.list_for_chunks()
-            history_rows = history_repo.list_for_chunks()
-            LOGGER.info(
-                "chunk sources loaded propositions=%d documents=%d histories=%d",
-                len(proposition_rows),
-                len(document_rows),
-                len(history_rows),
-            )
-            for row in proposition_rows:
-                with transaction(connection):
-                    chunk_repo.replace_source(builder.proposition(row))
-            for row in document_rows:
-                chunks = builder.document(row)
-                if chunks:
-                    with transaction(connection):
-                        chunk_repo.replace_source(chunks)
-            for row in history_rows:
-                with transaction(connection):
-                    chunk_repo.replace_source(builder.history(row))
-            pending = chunk_repo.without_embedding()
-            if not self.settings.llm_api_key:
-                LOGGER.warning(
-                    "embedding stage skipped reason=missing_llm_api_key pending_chunks_in_batch=%d",
-                    len(pending),
-                )
-                return
-            embedder = OpenAIEmbedder(
-                self.settings.llm_api_key,
-                self.settings.embedding_model,
-                self.settings.embedding_dimension,
-            )
-            embedded = 0
-            while pending:
-                for chunk in pending:
-                    vector = embedder.embed(chunk.content)
-                    with transaction(connection):
-                        chunk_repo.update_embedding(chunk.id, vector, embedder.model)
-                    embedded += 1
-                LOGGER.info("embedding progress embedded=%d", embedded)
-                pending = chunk_repo.without_embedding()
-            LOGGER.info("chunking and embedding stages completed embedded=%d", embedded)
+        LOGGER.info("RAG index stage started")
+        ChunkIndexPipeline(self.settings, self.factory).run()
 
     def _parameters(self) -> dict:
         return {
@@ -405,9 +347,7 @@ class IngestionPipeline:
             "camaraMaxPropositionsPerCandidate": (
                 self.settings.camara_max_propositions_per_candidate
             ),
-            "camaraMaxAuthorsPerProposition": (
-                self.settings.camara_max_authors_per_proposition
-            ),
+            "camaraMaxAuthorsPerProposition": (self.settings.camara_max_authors_per_proposition),
         }
 
     @staticmethod

@@ -1183,7 +1183,7 @@ Index CandidateSourceTypeIDX On (Candidate, SourceType);
 Index SourceIDX On (SourceType, SourceId);
 
 Index SourceChunkUniqueIDX On
-    (SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
+    (Candidate, SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
 
 Index ContentHashIDX On ContentHash;
 
@@ -1404,12 +1404,14 @@ Portanto o modelo utilizado no processo deve produzir vetor compatível com `LEN
 
 ```objectscript
 Index SourceChunkUniqueIDX On
-    (SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
+    (Candidate, SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
 ```
 
 A identidade do chunk considera:
 
 ```text
+Candidate
++
 tipo da origem
 +
 identificador da origem
@@ -2337,6 +2339,7 @@ Index CandidateDocumentHashIDX On (Candidate, DocumentHash) [ Unique ];
 ## PoliticalChunk
 
 ```text
+Candidate
 SourceType
 SourceId
 ChunkIndex
@@ -2347,7 +2350,7 @@ ContentHash
 
 ```objectscript
 Index SourceChunkUniqueIDX On
-    (SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
+    (Candidate, SourceType, SourceId, ChunkIndex, ContentHash) [ Unique ];
 ```
 
 ---
