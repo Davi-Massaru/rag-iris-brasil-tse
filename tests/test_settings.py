@@ -26,7 +26,7 @@ def test_settings_parse_csv_lists() -> None:
 
 
 def test_settings_cover_all_current_camara_matches_by_default() -> None:
-    assert Settings(**values()).camara_max_matched_candidates == 100
+    assert Settings(**values()).camara_max_matched_candidates == 50
 
 
 def test_settings_reject_vector_dimension_different_from_class() -> None:
@@ -41,7 +41,7 @@ def test_settings_reject_unofficial_source_host() -> None:
 
 def test_settings_reject_unbounded_camara_limits() -> None:
     with pytest.raises(ValidationError):
-        Settings(**values(), camara_max_matched_candidates=101)
+        Settings(**values(), camara_max_matched_candidates=51)
     with pytest.raises(ValidationError):
         Settings(**values(), camara_max_propositions_per_candidate=0)
     with pytest.raises(ValidationError):
