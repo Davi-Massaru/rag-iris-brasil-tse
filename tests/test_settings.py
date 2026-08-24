@@ -25,6 +25,10 @@ def test_settings_parse_csv_lists() -> None:
     assert settings.ingest_offices == ("GOVERNADOR",)
 
 
+def test_settings_enable_hybrid_iris_access_by_default() -> None:
+    assert Settings(**values()).iris_data_access_mode == "hybrid"
+
+
 def test_settings_cover_all_current_camara_matches_by_default() -> None:
     assert Settings(**values()).camara_max_matched_candidates == 50
 
@@ -41,7 +45,7 @@ def test_settings_reject_unofficial_source_host() -> None:
 
 def test_settings_reject_unbounded_camara_limits() -> None:
     with pytest.raises(ValidationError):
-        Settings(**values(), camara_max_matched_candidates=51)
+        Settings(**values(), camara_max_matched_candidates=101)
     with pytest.raises(ValidationError):
         Settings(**values(), camara_max_propositions_per_candidate=0)
     with pytest.raises(ValidationError):

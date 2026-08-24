@@ -13,6 +13,10 @@ class RepositorySupport:
     def table(self, name: str) -> str:
         return f"{self.schema}.{name}"
 
+    @property
+    def objects(self) -> Any | None:
+        return getattr(self.connection, "objects", None)
+
     def one(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
         cursor = self.connection.cursor()
         try:

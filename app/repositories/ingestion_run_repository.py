@@ -11,6 +11,25 @@ class IngestionRunRepository(RepositorySupport):
     def start(self, source: str, parameters: dict, source_hash: str | None = None) -> int:
         if source not in {"TSE_CANDIDATES", "TSE_PROPOSALS", "CAMARA", "RAG_INDEX"}:
             raise ValueError("invalid ingestion source")
+        parameters_json = json.dumps(parameters, ensure_ascii=False, sort_keys=True)
+        if self.objects is not None:
+            target = self.objects.new("IngestionRun")
+            self.objects.set_values(
+                target,
+                {
+                    "Source": source,
+                    "StartedAt": utc_now(),
+                    "Status": "RUNNING",
+                    "RecordsRead": 0,
+                    "RecordsCreated": 0,
+                    "RecordsUpdated": 0,
+                    "RecordsSkipped": 0,
+                    "RecordsFailed": 0,
+                    "SourceHash": source_hash,
+                    "ParametersJson": parameters_json,
+                },
+            )
+            return self.objects.save(target)
         self.execute(
             f"""INSERT INTO {self.table("IngestionRun")}
             (Source,StartedAt,Status,RecordsRead,RecordsCreated,RecordsUpdated,RecordsSkipped,
@@ -19,7 +38,7 @@ class IngestionRunRepository(RepositorySupport):
                 source,
                 utc_now(),
                 source_hash,
-                json.dumps(parameters, ensure_ascii=False, sort_keys=True),
+                parameters_json,
             ),
         )
         row = self.one(

@@ -16,6 +16,9 @@ FIELDS = (
 
 class CandidateRepository(RepositorySupport):
     def find_by_id(self, candidate_id: int) -> Candidate | None:
+        if self.objects is not None:
+            value = self.objects.open_id("Candidate", candidate_id)
+            return _candidate_object(value) if value is not None else None
         row = self.one(
             f"SELECT {FIELDS} FROM {self.table('Candidate')} WHERE ID=?",
             (candidate_id,),
@@ -52,6 +55,21 @@ class CandidateRepository(RepositorySupport):
 
     def save_match(self, candidate_id: int, match: MatchResult) -> None:
         deputy_id = match.deputy_id if match.status == "MATCHED" else None
+        if self.objects is not None:
+            value = self.objects.open_id("Candidate", candidate_id, for_update=True)
+            if value is None:
+                return
+            self.objects.set_values(
+                value,
+                {
+                    "CamaraDeputyId": deputy_id,
+                    "MatchStatus": str(match.status),
+                    "MatchConfidence": match.confidence,
+                    "UpdatedAt": utc_now(),
+                },
+            )
+            self.objects.save(value)
+            return
         self.execute(
             f"""UPDATE {self.table("Candidate")}
             SET CamaraDeputyId=?,MatchStatus=?,MatchConfidence=?,UpdatedAt=? WHERE ID=?""",
@@ -87,6 +105,26 @@ class CandidateRepository(RepositorySupport):
 
     def _insert(self, value: CandidateWrite) -> int:
         now = utc_now()
+        if self.objects is not None:
+            target = self.objects.new("Candidate")
+            self.objects.set_values(
+                target,
+                {
+                    "TseId": value.tse_id,
+                    "Name": value.name,
+                    "BallotName": value.ballot_name,
+                    "Party": value.party,
+                    "PartyNumber": value.party_number,
+                    "Office": value.office,
+                    "State": value.state,
+                    "CandidateNumber": value.candidate_number,
+                    "SourceUrl": value.source_url,
+                    "SourceCollectedAt": value.collected_at,
+                    "CreatedAt": now,
+                    "UpdatedAt": now,
+                },
+            )
+            return self.objects.save(target)
         self.execute(
             f"""INSERT INTO {self.table("Candidate")}
             (TseId,Name,BallotName,Party,PartyNumber,Office,State,CandidateNumber,
@@ -113,6 +151,27 @@ class CandidateRepository(RepositorySupport):
         return inserted.id
 
     def _update(self, candidate_id: int, value: CandidateWrite) -> None:
+        if self.objects is not None:
+            target = self.objects.open_id("Candidate", candidate_id, for_update=True)
+            if target is None:
+                raise RuntimeError("candidate disappeared during update")
+            self.objects.set_values(
+                target,
+                {
+                    "Name": value.name,
+                    "BallotName": value.ballot_name,
+                    "Party": value.party,
+                    "PartyNumber": value.party_number,
+                    "Office": value.office,
+                    "State": value.state,
+                    "CandidateNumber": value.candidate_number,
+                    "SourceUrl": value.source_url,
+                    "SourceCollectedAt": value.collected_at,
+                    "UpdatedAt": utc_now(),
+                },
+            )
+            self.objects.save(target)
+            return
         self.execute(
             f"""UPDATE {self.table("Candidate")} SET
             Name=?,BallotName=?,Party=?,PartyNumber=?,Office=?,State=?,CandidateNumber=?,
@@ -170,6 +229,26 @@ def _candidate(row: Any) -> Candidate:
         match_status=_optional_str(row[10]),
         match_confidence=_optional_float(row[11]),
         source_url=_optional_str(row[12]),
+    )
+
+
+def _candidate_object(value: Any) -> Candidate:
+    return _candidate(
+        (
+            value._Id(),
+            value.TseId,
+            value.Name,
+            value.BallotName,
+            value.Party,
+            value.PartyNumber,
+            value.Office,
+            value.State,
+            value.CandidateNumber,
+            value.CamaraDeputyId,
+            value.MatchStatus,
+            value.MatchConfidence,
+            value.SourceUrl,
+        )
     )
 
 

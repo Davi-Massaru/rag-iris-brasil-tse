@@ -11,4 +11,6 @@ if 'sc write "ERROR: IPM download failed: "_$system.Status.GetErrorText(sc),! ha
 set sc=$system.OBJ.LoadStream(request.HttpResponse.Data,"ck")
 if 'sc write "ERROR: IPM install failed: "_$system.Status.GetErrorText(sc),! halt
 zpm "load -bypass-py-deps /home/irisowner/dev"
+set sc=$system.OBJ.Compile("IRISPolitical.Model.Candidate,IRISPolitical.Model.Proposition","ck")
+if 'sc write "ERROR: final relationship compile failed: "_$system.Status.GetErrorText(sc),! halt
 halt

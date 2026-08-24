@@ -85,6 +85,21 @@ def test_connection_factory_uses_embedded_iris_without_tcp(monkeypatch) -> None:
     assert state == {"level": 0, "commits": 1, "rollbacks": 0}
 
 
+def test_connection_factory_can_force_sql_only_embedded_mode(monkeypatch) -> None:  # noqa: ANN001
+    embedded_iris = SimpleNamespace(
+        sql=SimpleNamespace(exec=lambda _sql, *_params: []),
+        tstart=lambda: None,
+        tcommit=lambda: None,
+        trollbackone=lambda: None,
+    )
+    monkeypatch.setitem(sys.modules, "iris", embedded_iris)
+
+    settings = Settings(_env_file=None, iris_data_access_mode="sql")
+    connection = IrisConnectionFactory(settings).connect()
+
+    assert connection.objects is None
+
+
 def test_embedded_cursor_treats_iris_eof_as_end_of_result(monkeypatch) -> None:  # noqa: ANN001
     class EmptyResult:
         def __iter__(self):  # noqa: ANN204

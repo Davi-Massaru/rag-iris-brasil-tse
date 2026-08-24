@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     iris_username: str = "_SYSTEM"
     iris_password: str = "SYS"
     iris_sql_schema: str = "IRISPolitical_Model"
+    iris_data_access_mode: Literal["sql", "hybrid"] = "hybrid"
 
     tse_ckan_base_url: str = "https://dadosabertos.tse.jus.br/api/3/action"
     tse_dataset_id: str = "candidatos-2026"

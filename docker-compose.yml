@@ -11,6 +11,7 @@ services:
       - iris-data:/data
     environment:
       IRIS_SQL_SCHEMA: IRISPolitical_Model
+      IRIS_DATA_ACCESS_MODE: ${IRIS_DATA_ACCESS_MODE:-hybrid}
       TSE_DATASET_ID: ${TSE_DATASET_ID:-candidatos-2026}
       INGEST_ELECTION_YEAR: ${INGEST_ELECTION_YEAR:-2026}
       INGEST_STATES: ${INGEST_STATES:-SP}

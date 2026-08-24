@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, datetime
 from importlib import import_module
 from typing import Any, Protocol, cast
 
 from app.config import Settings
 
+from .object_access import EmbeddedObjectAccess, embedded_value
+
 LOGGER = logging.getLogger(__name__)
-IRIS_DATE_EPOCH = date(1840, 12, 31)
 
 
 class _EmbeddedIrisSql(Protocol):
@@ -32,19 +32,6 @@ def _embedded_iris() -> _EmbeddedIrisApi:
     return cast(_EmbeddedIrisApi, import_module("iris"))
 
 
-def _embedded_parameter(value: Any) -> Any:
-    """Convert Python temporal values to formats accepted by IRIS Embedded SQL."""
-    # Embedded Python exposes SQL NULL as the IRIS logical empty string. Passing
-    # Python None directly creates a %SYS.Python object reference instead.
-    if value is None:
-        return ""
-    if isinstance(value, datetime):
-        return value.isoformat(sep=" ", timespec="microseconds")
-    if isinstance(value, date):
-        return (value - IRIS_DATE_EPOCH).days
-    return value
-
-
 def _statement_summary(sql: str) -> str:
     """Return useful SQL context without logging parameter values."""
     return " ".join(sql.split())[:160]
@@ -58,7 +45,7 @@ class EmbeddedIrisCursor:
 
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> None:
         self.connection._ensure_transaction()
-        normalized = tuple(_embedded_parameter(value) for value in params)
+        normalized = tuple(embedded_value(value) for value in params)
         try:
             result = _embedded_iris().sql.exec(sql, *normalized)
         except Exception:
@@ -92,9 +79,10 @@ class EmbeddedIrisCursor:
 
 
 class EmbeddedIrisConnection:
-    def __init__(self) -> None:
+    def __init__(self, *, objects_enabled: bool = True) -> None:
         self._transaction_started = False
         self._closed = False
+        self.objects = EmbeddedObjectAccess(self._ensure_transaction) if objects_enabled else None
 
     def _ensure_transaction(self) -> None:
         if self._closed:
@@ -131,7 +119,9 @@ class IrisConnectionFactory:
         iris = import_module("iris")
 
         if hasattr(iris, "sql"):
-            return EmbeddedIrisConnection()
+            return EmbeddedIrisConnection(
+                objects_enabled=self.settings.iris_data_access_mode == "hybrid"
+            )
 
         dbapi = import_module("iris.dbapi")
 
