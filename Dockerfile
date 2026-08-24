@@ -44,6 +44,7 @@ WORKDIR /opt/iris-political
 COPY requirements-ui.txt ./
 RUN pip install --no-cache-dir -r requirements-ui.txt
 COPY app ./app
+COPY .streamlit ./.streamlit
 
 EXPOSE 8501
 CMD ["streamlit", "run", "app/ui/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]

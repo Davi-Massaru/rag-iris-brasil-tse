@@ -8,6 +8,7 @@ import streamlit as st
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:52773/api").rstrip("/")
 REQUEST_TIMEOUT = (5, 120)
+QUESTION_PLACEHOLDER = "Pergunte sobre propostas, atuação pública ou histórico político"
 
 
 def api_get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -39,7 +40,7 @@ def candidate_options() -> tuple[list[str], dict[str, int | None]]:
 def render_sources(sources: list[dict[str, Any]]) -> None:
     if not sources:
         return
-    st.subheader("Fontes")
+    st.markdown("#### Fontes consultadas")
     for position, source in enumerate(sources, 1):
         evidence_id = source.get("evidenceId") or f"E{position}"
         title = source.get("title") or "Fonte"
@@ -59,35 +60,61 @@ def render_sources(sources: list[dict[str, Any]]) -> None:
                 st.link_button("Abrir fonte oficial", source["sourceUrl"])
 
 
+def render_answer(result: dict[str, Any]) -> None:
+    candidate = result.get("candidate")
+    with st.chat_message("assistant", avatar="🏛️"):
+        if candidate:
+            st.caption(
+                f"Resposta sobre {candidate['name']} · "
+                f"{candidate.get('party') or 'sem partido'} / {candidate['state']}"
+            )
+        st.markdown(result["answer"])
+        render_sources(result.get("sources", []))
+
+
 def main() -> None:
     st.set_page_config(page_title="IRIS Political Insight", page_icon="🏛️")
     st.title("IRIS Political Insight")
-    st.caption("Respostas baseadas em dados oficiais do TSE e da Câmara dos Deputados.")
+    st.caption(
+        "Consulte propostas e atuações políticas com respostas baseadas em fontes oficiais "
+        "do TSE e da Câmara dos Deputados."
+    )
     try:
         labels, mapping = candidate_options()
     except requests.RequestException as exc:
-        st.error(f"API indisponível: {exc}")
+        st.error(
+            "A consulta está indisponível no momento. "
+            "Verifique se a API está ativa e tente novamente."
+        )
+        st.caption(f"Detalhes técnicos: {exc}")
         st.stop()
-    selected = st.selectbox("Candidato", labels)
-    question = st.text_area(
-        "Pergunta",
-        placeholder="Quais propostas e atuações públicas constam nas fontes indexadas?",
+
+    selected = st.selectbox(
+        "Filtrar por candidato",
+        labels,
+        help="Escolha um candidato ou mantenha a busca em toda a base indexada.",
     )
-    if st.button("Perguntar", type="primary", disabled=not question.strip()):
-        payload = {"question": question.strip(), "candidateId": mapping[selected]}
+
+    st.markdown("### Faça sua pergunta")
+    st.caption("Pressione **Enter** para enviar · use **Shift + Enter** para quebrar a linha.")
+    question = st.chat_input(
+        QUESTION_PLACEHOLDER,
+        key="political_question",
+        max_chars=4_000,
+    )
+
+    if question and question.strip():
+        normalized_question = question.strip()
+        with st.chat_message("user"):
+            st.write(normalized_question)
+
+        payload = {"question": normalized_question, "candidateId": mapping[selected]}
         try:
-            with st.spinner("Consultando as fontes..."):
-                result = api_post("/ask", payload)
-            candidate = result.get("candidate")
-            if candidate:
-                st.caption(
-                    f"Resposta sobre {candidate['name']} — "
-                    f"{candidate.get('party') or 'sem partido'} / {candidate['state']}"
-                )
-            st.markdown(result["answer"])
-            render_sources(result.get("sources", []))
+            with st.spinner("Consultando fontes oficiais..."):
+                render_answer(api_post("/ask", payload))
         except requests.RequestException as exc:
-            st.error(f"Não foi possível consultar a API: {exc}")
+            st.error("Não foi possível concluir a consulta. Tente novamente em alguns instantes.")
+            st.caption(f"Detalhes técnicos: {exc}")
 
 
 if __name__ == "__main__":
