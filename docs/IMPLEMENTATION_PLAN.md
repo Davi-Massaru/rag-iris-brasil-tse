@@ -5,7 +5,7 @@
 Este documento define a ordem de implementação do **IRIS Political Insight** considerando a estrutura atual do repositório:
 
 ```text
-intersystems-iris-dev-template/
+tse-iris-rag/
 │
 ├── .devcontainer/
 ├── .github/

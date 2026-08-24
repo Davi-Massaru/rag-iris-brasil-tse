@@ -3,7 +3,7 @@ on:
 
   # publish on pushes to the main branch (image tagged as "latest")
   # image name: will be: ghcr.io/${{ github.repository }}:latest
-  # e.g.: ghcr.io/intersystems-community/intersystems-iris-dev-template:latest
+  # e.g.: ghcr.io/intersystems-community/tse-iris-rag:latest
   push:
     branches:
       - master
