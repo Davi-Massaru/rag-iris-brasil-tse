@@ -115,8 +115,28 @@ def client(settings):  # noqa: ANN001, ANN201
 
 
 def test_five_public_endpoints(client) -> None:  # noqa: ANN001
-    assert client.get("/candidates").get_json()["items"][0]["tse_id"] == "TSE1"
-    assert client.get("/candidates/1").status_code == 200
+    candidate_fields = {
+        "id",
+        "tse_id",
+        "name",
+        "ballot_name",
+        "party",
+        "party_number",
+        "office",
+        "state",
+        "candidate_number",
+        "camara_deputy_id",
+        "match_status",
+        "match_confidence",
+        "source_url",
+    }
+    listed_candidate = client.get("/candidates").get_json()["items"][0]
+    detailed_candidate = client.get("/candidates/1").get_json()
+
+    assert listed_candidate["tse_id"] == "TSE1"
+    assert set(listed_candidate) == candidate_fields
+    assert set(detailed_candidate) == candidate_fields
+    assert detailed_candidate == listed_candidate
     assert client.get("/candidates/1/propositions").get_json()["items"][0]["camaraId"] == 900
     assert (
         client.post("/search", json={"query": "educação"}).get_json()["results"][0]["chunk_id"] == 3

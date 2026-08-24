@@ -700,19 +700,25 @@ Response:
 
 Para o MVP utilizar Streamlit.
 
-Tela principal:
+Barra lateral e tela principal:
 
 ```text
-IRIS Political Insight
-
-[Candidato ▼]
-
-Pergunte sobre o histórico político:
-
-[ Quais projetos estão relacionados à IA? ]
-
-                  [Pesquisar]
+┌ Barra lateral ────────────────────┐  IRIS Political Insight
+│ Perfil do candidato selecionado  │  Consulte propostas e atuações políticas...
+│ nome, cargo, UF, partido,        │
+│ número, vínculo e fonte oficial  │  [Candidato ▼]
+│                                  │
+│ Propostas                        │  Pergunte sobre o histórico político:
+│ título, situação, ementa         │  [ Quais projetos estão relacionados à IA? ]
+│ e fonte oficial                  │                         [Pesquisar]
+└──────────────────────────────────┘
 ```
+
+O seletor fica na área principal, imediatamente abaixo do texto introdutório, e é
+alimentado por `GET /candidates`. Quando um candidato individual é selecionado, a barra
+lateral apresenta seu perfil, carregado por `GET /candidates/{id}`, e suas proposições,
+carregadas por `GET /candidates/{id}/propositions`. A opção `Todos os candidatos` mantém a
+consulta global com `candidateId` nulo e não exibe card lateral.
 
 Resultado:
 
