@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from app.config import Settings
 from app.embeddings import OpenAIEmbedder
-from app.rag import OpenAILanguageModel, RagService
-from app.repositories import CandidateRepository
+from app.rag import OpenAILanguageModel, RagContextLoader, RagService
+from app.repositories import (
+    CandidateRepository,
+    PoliticalHistoryRepository,
+    ProposalDocumentRepository,
+    PropositionAuthorRepository,
+    PropositionRepository,
+    PropositionTopicRepository,
+)
 from app.retrieval import (
     CoverageSearch,
     HybridSearch,
@@ -37,8 +44,19 @@ class ServiceFactory:
             self.settings.llm_model,
             self.settings.llm_max_output_tokens,
         )
+        schema = self.settings.iris_sql_schema
+        candidates = CandidateRepository(connection, schema)
+        context_loader = RagContextLoader(
+            candidates,
+            PropositionRepository(connection, schema),
+            ProposalDocumentRepository(connection, schema),
+            PoliticalHistoryRepository(connection, schema),
+            PropositionAuthorRepository(connection, schema),
+            PropositionTopicRepository(connection, schema),
+        )
         return RagService(
             self.search(connection),
             model,
-            CandidateRepository(connection, self.settings.iris_sql_schema),
+            candidates,
+            context_loader,
         )

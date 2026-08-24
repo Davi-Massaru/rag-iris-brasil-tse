@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.domain import PropositionWrite, UpsertResult, utc_now
 
 from .base import RepositorySupport
@@ -75,6 +77,38 @@ class PropositionRepository(RepositorySupport):
             SourceCollectedAt FROM {self.table("Proposition")} ORDER BY ID"""
         )
 
+    def context_by_camara_ids(
+        self,
+        candidate_id: int,
+        camara_ids: Sequence[str],
+    ) -> dict[str, dict]:
+        ids = tuple(dict.fromkeys(int(value) for value in camara_ids if str(value).isdigit()))
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.all(
+            f"""SELECT ID,CamaraId,Type,Number,Year,Title,Summary,DetailedSummary,
+            PresentationDate,Status,SourceUrl FROM {self.table("Proposition")}
+            WHERE Candidate=? AND CamaraId IN ({placeholders})""",
+            (candidate_id, *ids),
+        )
+        return {
+            str(row[1]): {
+                "propositionId": int(row[0]),
+                "camaraId": int(row[1]),
+                "type": _optional(row[2]),
+                "number": _optional_int(row[3]),
+                "year": _optional_int(row[4]),
+                "title": _optional(row[5]),
+                "summary": _optional(row[6]),
+                "detailedSummary": _optional(row[7]),
+                "presentationDate": _optional(row[8]),
+                "status": _optional(row[9]),
+                "sourceUrl": _optional(row[10]),
+            }
+            for row in rows
+        }
+
     def repair_invalid_years(self) -> int:
         rows = self.all(
             f"""SELECT ID,Type,Number,YEAR(PresentationDate)
@@ -93,3 +127,11 @@ class PropositionRepository(RepositorySupport):
             )
             repaired += 1
         return repaired
+
+
+def _optional(value) -> str | None:  # noqa: ANN001
+    return None if value in (None, "") else str(value)
+
+
+def _optional_int(value) -> int | None:  # noqa: ANN001
+    return None if value in (None, "") else int(value)

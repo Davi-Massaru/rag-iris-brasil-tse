@@ -45,12 +45,28 @@ def plan_query(query: str, explicit_source_type: str | None = None) -> QueryPlan
         "diretrizes de governo",
     )
     summary = _contains_any(normalized, "resumo", "resuma", "sintese", "visao geral")
+    history = _contains_any(normalized, "historico politico", "historico parlamentar", "mandato")
+    propositions = _contains_any(normalized, "projeto", "proposicao", "proposicoes", "ementa")
     if government and summary:
         return QueryPlan(
             "GOVERNMENT_PLAN_SUMMARY",
             QueryStrategy.DOCUMENT_COVERAGE,
             "GOVERNMENT_PROPOSAL",
         )
+    if history and summary:
+        return QueryPlan(
+            "POLITICAL_HISTORY_SUMMARY",
+            QueryStrategy.DOCUMENT_COVERAGE,
+            "POLITICAL_HISTORY",
+        )
+    if propositions and summary:
+        return QueryPlan(
+            "PROPOSITION_SUMMARY",
+            QueryStrategy.DOCUMENT_COVERAGE,
+            "PROPOSITION",
+        )
+    if summary:
+        return QueryPlan("CANDIDATE_SUMMARY", QueryStrategy.DOCUMENT_COVERAGE)
 
     frequency = _contains_any(
         normalized,
@@ -69,9 +85,9 @@ def plan_query(query: str, explicit_source_type: str | None = None) -> QueryPlan
         )
     if government:
         return QueryPlan("GOVERNMENT_PLAN_TOPIC", QueryStrategy.HYBRID, "GOVERNMENT_PROPOSAL")
-    if _contains_any(normalized, "historico politico", "historico parlamentar", "mandato"):
+    if history:
         return QueryPlan("POLITICAL_HISTORY", QueryStrategy.HYBRID, "POLITICAL_HISTORY")
-    if _contains_any(normalized, "projeto", "proposicao", "proposicoes", "ementa"):
+    if propositions:
         return QueryPlan("PROPOSITION_SEARCH", QueryStrategy.HYBRID, "PROPOSITION")
     return QueryPlan("GENERAL_EVIDENCE", QueryStrategy.HYBRID)
 

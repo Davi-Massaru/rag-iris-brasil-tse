@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.domain import TopicWrite, UpsertResult, utc_now
 
 from .base import RepositorySupport
@@ -37,3 +39,27 @@ class PropositionTopicRepository(RepositorySupport):
             (proposition_id,),
         )
         return tuple(str(row[0]) for row in rows)
+
+    def context_by_proposition_ids(
+        self,
+        proposition_ids: Sequence[int],
+    ) -> dict[int, list[dict]]:
+        ids = tuple(dict.fromkeys(int(value) for value in proposition_ids))
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.all(
+            f"""SELECT Proposition,ExternalCode,Name
+            FROM {self.table("PropositionTopic")}
+            WHERE Proposition IN ({placeholders}) ORDER BY Proposition,Name""",
+            ids,
+        )
+        result: dict[int, list[dict]] = {}
+        for row in rows:
+            result.setdefault(int(row[0]), []).append(
+                {
+                    "externalCode": int(row[1]) if row[1] not in (None, "") else None,
+                    "name": str(row[2]),
+                }
+            )
+        return result

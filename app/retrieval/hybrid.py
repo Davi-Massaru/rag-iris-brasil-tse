@@ -37,7 +37,7 @@ class HybridSearch:
             and candidate_id is not None
             and self.coverage is not None
         ):
-            return self.coverage.search(candidate_id, plan.source_type or "", top_k)
+            return self.coverage.search(candidate_id, plan.source_type, top_k)
         if (
             plan.strategy == QueryStrategy.THEME_FREQUENCY
             and candidate_id is not None

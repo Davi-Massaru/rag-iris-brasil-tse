@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.domain import AuthorWrite, UpsertResult, utc_now
 
 from .base import RepositorySupport
@@ -48,6 +50,33 @@ class PropositionAuthorRepository(RepositorySupport):
             (proposition_id,),
         )
         return tuple(str(row[0]) for row in rows)
+
+    def context_by_proposition_ids(
+        self,
+        proposition_ids: Sequence[int],
+    ) -> dict[int, list[dict]]:
+        ids = tuple(dict.fromkeys(int(value) for value in proposition_ids))
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.all(
+            f"""SELECT Proposition,CamaraAuthorId,Name,AuthorType,Uri,IsMainAuthor
+            FROM {self.table("PropositionAuthor")}
+            WHERE Proposition IN ({placeholders}) ORDER BY Proposition,ID""",
+            ids,
+        )
+        result: dict[int, list[dict]] = {}
+        for row in rows:
+            result.setdefault(int(row[0]), []).append(
+                {
+                    "camaraAuthorId": int(row[1]) if row[1] not in (None, "") else None,
+                    "name": str(row[2]),
+                    "authorType": str(row[3]) if row[3] not in (None, "") else None,
+                    "uri": str(row[4]) if row[4] not in (None, "") else None,
+                    "isMainAuthor": row[5] not in (None, "", 0, "0", False),
+                }
+            )
+        return result
 
     @staticmethod
     def _same_key(row: tuple, value: AuthorWrite) -> bool:

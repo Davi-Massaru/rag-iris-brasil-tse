@@ -322,7 +322,7 @@ diretamente quando o pipeline é executado no host.
 | `LLM_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente o cliente OpenAI. |
 | `LLM_API_KEY` | vazio | ingestão, busca vetorial e `/ask` | Quando ausente, os chunks são preservados e o run `RAG_INDEX` fica `PARTIAL`, com a quantidade exata de embeddings pendentes. Consultas de cobertura documental e agregações SQL continuam locais. |
 | `LLM_MODEL` | `gpt-5-mini` | `app/api/services.py` | Modelo usado pela geração final de resposta no endpoint `/ask`. |
-| `LLM_MAX_OUTPUT_TOKENS` | `1800` | `app/rag/service.py` | Limite explícito da única chamada de geração feita por pergunta. |
+| `LLM_MAX_OUTPUT_TOKENS` | `4000` | `app/rag/service.py` | Limite inicial da geração; respostas incompletas ou vazias recebem uma nova tentativa limitada a 8000 tokens. |
 
 No Compose, `EMBEDDING_MODEL`, `EMBEDDING_BATCH_SIZE`, `LLM_API_KEY`, `LLM_MODEL` e
 `LLM_MAX_OUTPUT_TOKENS` são encaminhadas ao container `iris`. As demais usam o padrão

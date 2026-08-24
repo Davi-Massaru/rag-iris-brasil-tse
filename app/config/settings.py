@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     llm_provider: str = "openai"
     llm_api_key: str | None = None
     llm_model: str = "gpt-5-mini"
-    llm_max_output_tokens: int = Field(default=1_800, ge=256, le=8_000)
+    llm_max_output_tokens: int = Field(default=4_000, ge=256, le=8_000)
 
     api_base_url: str = "http://localhost:52773/api"
     api_host: str = "0.0.0.0"

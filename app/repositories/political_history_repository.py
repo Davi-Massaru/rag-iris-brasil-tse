@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.domain import HistoryWrite, UpsertResult, utc_now
 
 from .base import RepositorySupport
@@ -67,3 +69,39 @@ class PoliticalHistoryRepository(RepositorySupport):
             ExternalId,Situation,SourceUrl,SourceCollectedAt FROM {self.table("PoliticalHistory")}
             WHERE ExternalId IS NOT NULL ORDER BY ID"""
         )
+
+    def context_by_external_ids(
+        self,
+        candidate_id: int,
+        external_ids: Sequence[str],
+    ) -> dict[str, dict]:
+        ids = tuple(dict.fromkeys(str(value) for value in external_ids if value))
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.all(
+            f"""SELECT ID,Institution,Position,Party,State,StartDate,EndDate,ExternalId,
+            Situation,SourceUrl,SourceCollectedAt FROM {self.table("PoliticalHistory")}
+            WHERE Candidate=? AND ExternalId IN ({placeholders})""",
+            (candidate_id, *ids),
+        )
+        return {
+            str(row[7]): {
+                "politicalHistoryId": int(row[0]),
+                "institution": _optional(row[1]),
+                "position": _optional(row[2]),
+                "party": _optional(row[3]),
+                "state": _optional(row[4]),
+                "startDate": _optional(row[5]),
+                "endDate": _optional(row[6]),
+                "externalId": str(row[7]),
+                "situation": _optional(row[8]),
+                "sourceUrl": _optional(row[9]),
+                "sourceCollectedAt": _optional(row[10]),
+            }
+            for row in rows
+        }
+
+
+def _optional(value) -> str | None:  # noqa: ANN001
+    return None if value in (None, "") else str(value)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.domain import ProposalDocumentWrite, UpsertResult, utc_now
 
 from .base import RepositorySupport
@@ -62,6 +64,35 @@ class ProposalDocumentRepository(RepositorySupport):
             (*row[:8], self._read_raw_text(int(row[0]), int(row[8] or 0)), row[9]) for row in rows
         ]
 
+    def context_by_hashes(
+        self,
+        candidate_id: int,
+        document_hashes: Sequence[str],
+    ) -> dict[str, dict]:
+        hashes = tuple(dict.fromkeys(str(value) for value in document_hashes if value))
+        if not hashes:
+            return {}
+        placeholders = ",".join("?" for _ in hashes)
+        rows = self.all(
+            f"""SELECT ID,ElectionYear,Title,SourceUrl,SourceResourceId,FileName,
+            DocumentHash,SourceCollectedAt FROM {self.table("ProposalDocument")}
+            WHERE Candidate=? AND DocumentHash IN ({placeholders})""",
+            (candidate_id, *hashes),
+        )
+        return {
+            str(row[6]): {
+                "proposalDocumentId": int(row[0]),
+                "electionYear": int(row[1]),
+                "title": _optional(row[2]),
+                "sourceUrl": _optional(row[3]),
+                "sourceResourceId": _optional(row[4]),
+                "fileName": _optional(row[5]),
+                "documentHash": str(row[6]),
+                "sourceCollectedAt": _optional(row[7]),
+            }
+            for row in rows
+        }
+
     def _read_raw_text(self, document_id: int, expected_length: int) -> str:
         """Materialize an IRIS character stream through portable SQL fragments.
 
@@ -88,3 +119,7 @@ class ProposalDocumentRepository(RepositorySupport):
                 f"expected {expected_length}, got {len(content)}"
             )
         return content
+
+
+def _optional(value) -> str | None:  # noqa: ANN001
+    return None if value in (None, "") else str(value)

@@ -12,14 +12,19 @@ class CoverageSearch(RepositorySupport):
     def search(
         self,
         candidate_id: int,
-        source_type: str,
+        source_type: str | None,
         top_k: int,
     ) -> list[SearchResult]:
+        where = "Candidate=?"
+        params: tuple[object, ...] = (candidate_id,)
+        if source_type is not None:
+            where += " AND SourceType=?"
+            params = (candidate_id, source_type)
         rows = self.all(
             f"""SELECT ID,Candidate,SourceType,SourceId,Title,Content,SourceUrl,
             MetadataJson,ChunkIndex FROM {self.table("PoliticalChunk")}
-            WHERE Candidate=? AND SourceType=? ORDER BY SourceId,ChunkIndex,ID""",
-            (candidate_id, source_type),
+            WHERE {where} ORDER BY SourceType,SourceId,ChunkIndex,ID""",
+            params,
         )
         sampled = _representative_sample(rows, top_k)
         results: list[SearchResult] = []

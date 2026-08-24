@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+from collections.abc import Sequence
 from typing import Any
 
 from app.domain import Candidate, CandidateWrite, MatchResult, UpsertResult, utc_now
@@ -27,6 +28,18 @@ class CandidateRepository(RepositorySupport):
             (tse_id,),
         )
         return _candidate(row) if row else None
+
+    def find_by_ids(self, candidate_ids: Sequence[int]) -> dict[int, Candidate]:
+        ids = tuple(dict.fromkeys(int(value) for value in candidate_ids))
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.all(
+            f"SELECT {FIELDS} FROM {self.table('Candidate')} WHERE ID IN ({placeholders})",
+            ids,
+        )
+        values = [_candidate(row) for row in rows]
+        return {candidate.id: candidate for candidate in values}
 
     def upsert(self, value: CandidateWrite) -> UpsertResult:
         current = self.find_by_tse_id(value.tse_id)
