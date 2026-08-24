@@ -286,7 +286,7 @@ sem uma entrada correspondente em `docker-compose.yml`.
 | `CAMARA_MATCH_START_DATE` | `2020-01-01` no `.env.example` | somente `app/config/settings.py` | Configuração legada/reservada. No código atual ela não altera o matching nem a ingestão. |
 | `CAMARA_PAGE_SIZE` | `100` | `app/ingestion/camara/client.py` | Quantidade solicitada por página nas coleções da Câmara; aceita de 1 a 100. |
 | `CAMARA_LOOKBACK_YEARS` | `4` | `app/ingestion/camara/client.py` e pipeline | Calcula uma janela móvel a partir da data da execução. Filtra deputados considerados, histórico, mandatos e proposições. |
-| `CAMARA_MAX_MATCHED_CANDIDATES` | `10` | `app/ingestion/pipeline.py` | Limita quantos candidatos com correspondência recebem ingestão parlamentar detalhada em uma execução. O matching ainda pode ser salvo para outros candidatos. |
+| `CAMARA_MAX_MATCHED_CANDIDATES` | `100` | `app/ingestion/pipeline.py` | Limita quantos candidatos com correspondência recebem ingestão parlamentar detalhada em uma execução. O padrão cobre todos os candidatos correspondentes do recorte atual; o matching ainda pode ser salvo para candidatos adicionais. |
 | `CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE` | `50` | `app/ingestion/camara/client.py` | Limita as proposições mais recentes por parlamentar. A API é consultada em janelas de até três meses até atingir esse teto ou os quatro anos. |
 | `CAMARA_MAX_AUTHORS_PER_PROPOSITION` | `10` | `app/ingestion/camara/client.py` | Limita autores/apoiadores persistidos por proposição, priorizando registros marcados como proponentes. |
 

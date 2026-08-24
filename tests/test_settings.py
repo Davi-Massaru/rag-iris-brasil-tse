@@ -25,6 +25,10 @@ def test_settings_parse_csv_lists() -> None:
     assert settings.ingest_offices == ("GOVERNADOR",)
 
 
+def test_settings_cover_all_current_camara_matches_by_default() -> None:
+    assert Settings(**values()).camara_max_matched_candidates == 100
+
+
 def test_settings_reject_vector_dimension_different_from_class() -> None:
     with pytest.raises(ValidationError, match="PoliticalChunk"):
         Settings(**values(), embedding_dimension=768)
@@ -36,6 +40,8 @@ def test_settings_reject_unofficial_source_host() -> None:
 
 
 def test_settings_reject_unbounded_camara_limits() -> None:
+    with pytest.raises(ValidationError):
+        Settings(**values(), camara_max_matched_candidates=101)
     with pytest.raises(ValidationError):
         Settings(**values(), camara_max_propositions_per_candidate=0)
     with pytest.raises(ValidationError):

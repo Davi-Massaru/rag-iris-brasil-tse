@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     camara_match_start_date: str = "2000-01-01"
     camara_page_size: int = Field(default=100, gt=0, le=100)
     camara_lookback_years: int = Field(default=4, gt=0, le=20)
-    camara_max_matched_candidates: int = Field(default=10, gt=0, le=100)
+    camara_max_matched_candidates: int = Field(default=100, gt=0, le=100)
     camara_max_propositions_per_candidate: int = Field(default=50, gt=0, le=1000)
     camara_max_authors_per_proposition: int = Field(default=10, gt=0, le=100)
 
