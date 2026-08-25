@@ -14,6 +14,112 @@ CACHE_TTL_SECONDS = 60
 GLOBAL_CANDIDATE_LABEL = "Todos os candidatos"
 NOT_INFORMED = "Não informado"
 
+APP_THEME_CSS = """
+<style>
+    :root {
+        --iris-green: #009c3b;
+        --iris-green-dark: #006b2d;
+        --iris-green-soft: #eaf7ef;
+        --iris-yellow: #ffdf00;
+        --iris-yellow-soft: #fff9cc;
+        --iris-blue: #002776;
+        --iris-blue-soft: #edf2fb;
+        --iris-ink: #17351f;
+        --iris-border: #d8e5dc;
+    }
+
+    .stApp {
+        background:
+            radial-gradient(circle at 94% 3%, rgba(255, 223, 0, 0.16), transparent 22rem),
+            radial-gradient(circle at 4% 96%, rgba(0, 39, 118, 0.06), transparent 26rem),
+            #ffffff;
+        color: var(--iris-ink);
+    }
+
+    [data-testid="stHeader"] {
+        background: rgba(255, 255, 255, 0.92);
+        border-bottom: 1px solid var(--iris-border);
+    }
+
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, var(--iris-blue-soft) 0%, #ffffff 36%);
+        border-right: 1px solid #d7e0ef;
+    }
+
+    h1, h2, h3, h4 {
+        color: var(--iris-green-dark);
+        letter-spacing: -0.02em;
+    }
+
+    h1 {
+        border-left: 0.4rem solid var(--iris-yellow);
+        border-bottom: 0.12rem solid var(--iris-blue);
+        padding-left: 0.8rem;
+        padding-bottom: 0.35rem;
+    }
+
+    a {
+        color: var(--iris-blue) !important;
+    }
+
+    div[data-baseweb="select"] > div,
+    [data-testid="stChatInput"] > div {
+        border-color: #b9cdbf;
+        background-color: #ffffff;
+    }
+
+    div[data-baseweb="select"] > div:focus-within,
+    [data-testid="stChatInput"] > div:focus-within {
+        border-color: var(--iris-blue) !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 39, 118, 0.12);
+    }
+
+    .stButton > button,
+    .stLinkButton > a {
+        border-color: var(--iris-blue);
+        color: var(--iris-blue) !important;
+        background: #ffffff;
+        font-weight: 600;
+    }
+
+    .stButton > button:hover,
+    .stLinkButton > a:hover {
+        border-color: var(--iris-green-dark);
+        background: var(--iris-yellow-soft);
+        color: var(--iris-blue) !important;
+    }
+
+    [data-testid="stChatMessage"] {
+        background: #fbfdf9;
+        border: 1px solid var(--iris-border);
+        border-left: 0.25rem solid var(--iris-green);
+        border-radius: 0.8rem;
+    }
+
+    [data-testid="stExpander"] {
+        background: #ffffff;
+        border-color: var(--iris-border);
+    }
+
+    [data-testid="stExpander"] summary:hover {
+        color: var(--iris-blue);
+    }
+
+    [data-testid="stAlert"] {
+        border-left-color: var(--iris-yellow);
+    }
+
+    hr {
+        border-color: var(--iris-border);
+    }
+
+    ::selection {
+        background: var(--iris-yellow);
+        color: var(--iris-ink);
+    }
+</style>
+"""
+
 MATCH_STATUS_LABELS = {
     "MATCHED": "Vínculo confirmado com a Câmara",
     "REVIEW": "Vínculo pendente de revisão",
@@ -273,7 +379,12 @@ def render_answer(result: dict[str, Any]) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="IRIS Political Insight", page_icon="🏛️")
+    st.set_page_config(
+        page_title="IRIS Political Insight",
+        page_icon="🏛️",
+        layout="centered",
+    )
+    st.markdown(APP_THEME_CSS, unsafe_allow_html=True)
     st.title("IRIS Political Insight")
     st.caption(
         "Consulte propostas e atuações políticas com respostas baseadas em fontes oficiais "

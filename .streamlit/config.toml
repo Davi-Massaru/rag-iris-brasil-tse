@@ -1,2 +1,14 @@
 [client]
 toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#009C3B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6FAF7"
+textColor = "#17351F"
+linkColor = "#002776"
+borderColor = "#D8E5DC"
+showWidgetBorder = true
+baseRadius = "0.75rem"
+buttonRadius = "0.75rem"
