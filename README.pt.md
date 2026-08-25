@@ -4,9 +4,11 @@
 
 O **IRIS Political Insight** é uma plataforma de consulta e análise de dados públicos eleitorais e parlamentares brasileiros. Construída com **InterSystems IRIS**, **Hybrid Search** e **RAG (Retrieval-Augmented Generation)**, ela integra, estrutura, relaciona, indexa, recupera e contextualiza evidências oficiais do **Tribunal Superior Eleitoral (TSE)** e da **Câmara dos Deputados**, com rastreabilidade até a fonte.
 
+![Banner do IRIS Political Insight](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/banner.png)
+
 > **O Brasil está em campanha para as Eleições Gerais de 2026. E se explorar dados eleitorais públicos fosse tão simples quanto fazer uma pergunta?**
 
-[English version](README.md) · [Pipeline técnica](PIPELINE.pt.md) · [Artigo em português](ARTICLE.pt.md)
+[English version](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/README.md) · [Pipeline técnica](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/PIPELINE.pt.md) · [Artigo em português](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/ARTICLE.pt.md)
 
 Em **4 de outubro de 2026**, **158.745.463 eleitoras e eleitores** estarão aptos a participar das Eleições Gerais no Brasil, escolhendo representantes para **seis cargos eletivos**: Presidência da República, governos estaduais, Senado Federal, Câmara dos Deputados, assembleias legislativas e, no Distrito Federal, a Câmara Legislativa. Com **segundo turno para presidente da República e governadores** será realizado em **25 de outubro**. Fonte: [Tribunal Superior Eleitoral (TSE)](https://www.tse.jus.br/comunicacao/noticias/2026/Julho/mais-de-158-milhoes-de-eleitores-estao-aptos-votar-nas-eleicoes-2026).
 
@@ -142,7 +144,7 @@ Cada chunk conserva tipo, ID externo, URL oficial, candidato, metadados, hash e 
 
 Um comando executa candidatos do TSE, propostas de governo, associação/coleta da Câmara e índice RAG. Downloads são validados, gravações são idempotentes, chunks usam 700 tokens com overlap 100 e <code>text-embedding-3-small</code> produz 1.536 dimensões.
 
-Consulte **[PIPELINE.pt.md](PIPELINE.pt.md)** para contratos, matching, transações, paginação, hashes, falhas, chunking e retrieval. O README não duplica essa documentação.
+Consulte **[PIPELINE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/PIPELINE.pt.md)** para contratos, matching, transações, paginação, hashes, falhas, chunking e retrieval. O README não duplica essa documentação.
 
 ## 🧪 Demonstração reproduzível
 
@@ -289,13 +291,13 @@ docs/             # especificações, decisões e auditorias
 
 ## 📚 Documentação
 
-- [Pipeline técnica](PIPELINE.pt.md)
-- [Especificação](docs/SPEC%20%E2%80%94%20IRIS%20Political%20Insight.md)
-- [Plano de implementação](docs/IMPLEMENTATION_PLAN.md)
-- [Ingestão TSE + Câmara + IRIS](docs/IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md)
-- [Classes IRIS e mapeamento](docs/CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md)
-- [Migração WSGI](docs/MIGRACAO_FLASK_WAITRESS_PARA_IRIS_WSGI.md)
-- [Artigo técnico](ARTICLE.pt.md)
+- [Pipeline técnica](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/PIPELINE.pt.md)
+- [Especificação](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/SPEC%20%E2%80%94%20IRIS%20Political%20Insight.md)
+- [Plano de implementação](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/IMPLEMENTATION_PLAN.md)
+- [Ingestão TSE + Câmara + IRIS](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md)
+- [Classes IRIS e mapeamento](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md)
+- [Migração WSGI](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/MIGRACAO_FLASK_WAITRESS_PARA_IRIS_WSGI.md)
+- [Artigo técnico](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/ARTICLE.pt.md)
 
 ## 🏆 Concurso InterSystems 2026
 
@@ -313,10 +315,16 @@ O projeto concorre no tópico **RAG** do [Concurso InterSystems PT 2026](https:/
 | Pipeline explícito | Ingestão, chunking, vetor, retrieval, prompt e geração | Implementado e documentado |
 | WSGI nativo | <code>%SYS.Python.WSGI</code> em <code>/api</code> | Implementado; o bônus formal está no tópico PyProd |
 
-O método de desenvolvimento com OpenAI Codex, prompts-especificação, revisão humana e correções reais está em [ARTICLE.pt.md](ARTICLE.pt.md).
+O método de desenvolvimento com OpenAI Codex, prompts-especificação, revisão humana e correções reais está em [ARTICLE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/ARTICLE.pt.md).
 
 ## ⚖️ Licença e responsabilidade
 
-Código sob [licença MIT](LICENSE).
+Código sob [licença MIT](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/LICENSE).
 
 Projeto independente, sem vínculo com TSE, Câmara, candidaturas ou partidos. Organiza informações públicas e não substitui fontes oficiais nem o julgamento do eleitor.
+
+## 👤 Autor
+
+- [LinkedIn](https://www.linkedin.com/in/davimassarumuta/)
+- [InterSystems Developer Community](https://community.intersystems.com/user/davimassaru-teixeiramuta)
+- [InterSystems Open Exchange](https://openexchange.intersystems.com/user/Davi%20Massaru%20Teixeira%20Muta/ygbBNKanLnVDa9ffzk64UznaE)
