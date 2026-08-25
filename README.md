@@ -1,926 +1,317 @@
 # IRIS Political Insight
 
-## 1. Missão
+> **Brazil is already campaigning for its 2026 general election. What if exploring public electoral data were as easy as asking a question?**
 
-Consolidar dados políticos oficiais do TSE e da Câmara dos Deputados. Persistir os dados no InterSystems IRIS. Executar busca lexical, busca vetorial e RAG com fontes rastreáveis.
+[Versão em português](README.pt.md) · [Technical pipeline](PIPELINE.md) · [English article](ARTICLE.md)
 
-Use este documento como ordem de execução para desenvolvimento, teste e diagnóstico.
+Brazil's official campaign season is underway in August 2026. On **October 4**, 158,745,463 eligible voters may cast ballots for six offices; a possible presidential and gubernatorial runoff will follow on **October 25**. These dates and electorate figures come from Brazil's [Superior Electoral Court (TSE)](https://www.tse.jus.br/comunicacao/noticias/2026/Julho/mais-de-158-milhoes-de-eleitores-estao-aptos-votar-nas-eleicoes-2026).
 
-## 2. Situação operacional
+Brazil publishes a remarkable amount of information about candidates and legislative activity. The hard part is turning distributed files, APIs, identifiers, and documents into information people can actually explore. **IRIS Political Insight** uses InterSystems IRIS, official public data, Hybrid Search, and Retrieval-Augmented Generation (RAG) to provide a natural-language access layer over that evidence.
 
-Arquitetura oficial:
+This is not an “election chatbot” or a voting recommender. It is a **public electoral and political data intelligence platform** that integrates, structures, links, indexes, retrieves, and contextualizes official records while preserving political neutrality and traceability to the source.
 
-```text
-Navegador
-    |
-    +--> Streamlit :8501
-            |
-            +--> IRIS Web Gateway :52773/api
-                    |
-                    +--> %SYS.Python.WSGI
-                            |
-                            +--> Flask
-                                    |
-                                    +--> Embedded Python
-                                            |
-                                            +--> IRISAPP
-```
+## Brazil's 2026 election meets AI
 
-Serviços ativos:
+In October, voters will choose the president, state governors, senators, federal representatives, and state or Federal District representatives. Relevant records are published across agencies, formats, and access models.
 
-| Serviço | Função | Acesso local |
-|---|---|---|
-| `iris` | Banco, Web Gateway, WSGI e API Flask | `http://localhost:52773` |
-| `ui` | Interface Streamlit | `http://localhost:8501` |
+> **During an election year, how can we turn a massive volume of public data about candidates and elected officials into information any citizen can explore?**
 
-Não existe serviço `api`. Não existe Waitress. O servidor HTTP oficial da API é o IRIS.
+Public data is not automatically accessible information. Research may require government APIs, ZIP and CSV files, PDFs, SQL, several identifiers for the same person, and multiple official portals. The project lowers that barrier without replacing original sources.
 
-## Como o pipeline funciona
+## The solution
 
-O pipeline transforma dados públicos heterogêneos em evidências estruturadas e rastreáveis para busca híbrida e geração de respostas. O processo mantém separadas as responsabilidades de obtenção, normalização, persistência, recuperação e geração.
+The platform connects two dimensions of Brazilian public life:
 
-```mermaid
-flowchart TD
-    TSE["TSE: CKAN, ZIP, CSV e PDF"] --> ING["Ingestão e validação"]
-    CAM["Câmara: API REST JSON"] --> ING
-    ING --> NORM["Normalização e vínculo de identidade"]
-    NORM --> REL["Dados relacionais no IRIS"]
-    REL --> BUILD["Construção do texto recuperável"]
-    BUILD --> CHUNK["Chunking por tokens + proveniência"]
-    CHUNK --> EMB["Embedding de cada chunk"]
-    EMB --> VEC["%Vector no PoliticalChunk"]
-    Q["Pergunta do usuário"] --> QEMB["Embedding da pergunta"]
-    Q --> LEX["Busca lexical"]
-    QEMB --> SEM["Busca vetorial no IRIS"]
-    VEC --> SEM
-    CHUNK --> LEX
-    LEX --> RRF["Reciprocal Rank Fusion"]
-    SEM --> RRF
-    RRF --> TOP["Evidências mais relevantes"]
-    TOP --> PROMPT["Prompt restritivo + fontes"]
-    PROMPT --> LLM["Geração da resposta"]
-    LLM --> OUT["Resposta em PT-BR + fontes oficiais"]
-```
+- the **TSE — Brazil's Superior Electoral Court** — provides candidacies, offices, parties, states, and government programs when available;
+- the **Chamber of Deputies — the lower house of Brazil's National Congress** — provides history, external mandates, bills, authors, and topics for safely linked candidates.
 
-### 1. Ingestão
+A candidacy tells us who is running. Legislative records can add context for someone who has served in the Chamber. Cross-source identity resolution is deterministic and auditable; detailed parliamentary ingestion runs only for a <code>MATCHED</code> result.
 
-O TSE é acessado pela API CKAN. O pipeline descobre os recursos ativos, baixa os arquivos por HTTPS, calcula SHA-256, valida os ZIPs e interpreta o CSV oficial em Latin-1. As propostas de governo são extraídas dos PDFs e associadas ao candidato pelo `SQ_CANDIDATO` presente no nome oficial do arquivo, sem aproximação por nome.
+Structured filters, lexical matching, and vector similarity retrieve evidence. The system enriches each passage with its authoritative source record, then asks a language model to synthesize only that context.
 
-A API Dados Abertos da Câmara fornece deputados, histórico parlamentar, mandatos externos, proposições, autores e temas. As coleções seguem a paginação `links[rel=next]`. O vínculo TSE–Câmara usa nome, nome de urna, UF e histórico partidário; somente correspondências classificadas como `MATCHED` disparam a ingestão parlamentar automática.
+## Imagine asking...
 
-Cada execução registra origem, horários, hash e contadores em `IngestionRun`. Downloads e parsing ocorrem fora da transação; as gravações usam transações explícitas e chaves de idempotência no IRIS.
+These questions map to implemented query paths. Answers depend on the configured ingestion slice and evidence present in the corpus.
 
-### 2. Persistência multimodelo
+> “Summarize this candidate's government program.”
 
-O mesmo backend IRIS mantém duas representações complementares:
+> “Which bills associated with this candidate discuss public education?”
 
-- relacional: `Candidate`, `PoliticalHistory`, `Proposition`, `PropositionAuthor`, `PropositionTopic`, `ProposalDocument` e `IngestionRun` preservam campos, vínculos e identificadores oficiais;
-- vetorial: `PoliticalChunk` reúne o texto recuperável, a proveniência, os metadados, o hash e o embedding em `%Vector(DATATYPE = "DOUBLE", LEN = 1536)`.
+> “Which official topics occur most often in this candidate's bills?”
 
-Essa separação permite usar SQL e relacionamentos para filtros determinísticos, enquanto a representação vetorial atende consultas por similaridade semântica.
+> “What parliamentary history is available for this candidate?”
 
-### 3. Estratégia de chunking
+> “Which candidates have evidence related to reducing the six-day workweek?”
 
-O chunking é feito com `tiktoken` e parâmetros configuráveis, atualmente com janelas de 700 tokens e sobreposição de 100 tokens. O avanço efetivo é de 600 tokens. A mesma codificação é reutilizada para contar tokens e dividir o conteúdo; se o modelo não possuir uma codificação conhecida pelo `tiktoken`, o código usa `cl100k_base` como fallback.
+> “Which official sources support this answer?”
 
-A escolha busca equilibrar três necessidades:
+Individual mode rejects evidence belonging to anyone other than the selected candidate. Discovery mode searches globally, diversifies results across candidates, and keeps every passage attached to its authoritative identity. A candidate is never inferred from an author's name.
 
-- contexto suficiente para manter uma proposição, um registro histórico ou uma passagem de proposta de governo compreensível;
-- granularidade suficiente para que a busca recupere o trecho relevante, sem enviar documentos inteiros ao modelo;
-- continuidade entre janelas, pois a sobreposição reduz a perda de informações situadas na fronteira entre dois chunks.
+## Why this matters now
 
-Antes da divisão, o texto tem quebras de linha e espaços normalizados. Proposições e históricos curtos formam naturalmente um único chunk; conteúdos extensos, sobretudo propostas de governo, produzem múltiplas janelas. Marcadores de página extraídos do PDF permitem registrar `pageStart` e `pageEnd` quando presentes.
+Brazil's campaign period began on **August 16**, according to the [official TSE calendar](https://www.tse.jus.br/comunicacao/noticias/2026/Marco/eleicoes-2026-confira-as-principais-datas-do-calendario-eleitoral). This project is being built while the election is underway, not for a hypothetical future event.
 
-Cada chunk conserva:
+Its public-interest value is reducing the distance between **published data** and **explorable information**. It does not endorse candidates, assign political scores or labels, predict results, or create rankings. It distinguishes missing evidence from evidence of absence, exposes the passages and official links behind an answer, and remains nonpartisan.
 
-```text
-Candidate
-SourceType
-SourceId
-ChunkIndex
-Title
-Content
-SourceUrl
-MetadataJson
-ContentHash
-TokenCount
-```
+## How it works
 
-O `ContentHash` é um SHA-256 do texto normalizado. Ele sustenta idempotência, identifica alterações e evita duplicação do mesmo conteúdo. A estratégia atual é deliberadamente simples e reproduzível: usa janelas fixas por tokens, não segmentação semântica por títulos ou parágrafos. Para documentos com estrutura complexa, uma evolução futura deve comparar essa abordagem com chunking hierárquico por seção usando métricas de retrieval.
-
-### 4. Escolha do embedding
-
-O padrão é `text-embedding-3-small`, chamado pelo endpoint de embeddings da OpenAI. A [documentação oficial do modelo](https://developers.openai.com/api/docs/models/text-embedding-3-small) o caracteriza como um modelo pequeno de embeddings aplicável a busca e medição de relação entre textos.
-
-No projeto, a escolha atende ao MVP porque:
-
-- documentos e perguntas usam exatamente o mesmo modelo;
-- a chamada solicita explicitamente 1.536 dimensões;
-- a dimensão coincide com `PoliticalChunk.Embedding` no IRIS;
-- o vetor é validado antes da persistência;
-- o perfil menor é adequado ao ciclo de ingestão e consulta da demonstração.
-
-O nome do modelo é configurável, mas a implementação atual exige 1.536 dimensões. Trocar o modelo requer confirmar suporte ao parâmetro de dimensão, compatibilidade com o tokenizer e recompilar a propriedade `%Vector` caso a dimensão seja alterada.
-
-### 5. Indexação e recuperação
-
-Após a criação dos chunks, os embeddings pendentes são gerados e persistidos em `PoliticalChunk.Embedding`. O MVP não cria índice vetorial HNSW: a busca semântica usa `VECTOR_COSINE(Embedding, TO_VECTOR(...))` no IRIS e ordena pela similaridade. Essa opção reduz a configuração inicial e atende cargas pequenas de demonstração; volumes maiores devem adicionar e medir um índice vetorial compatível com a versão do IRIS.
-
-A recuperação executa dois rankings independentes:
-
-- lexical: normaliza acentos e caixa, favorece a frase exata e conta ocorrências dos termos em `Title` e `Content`;
-- vetorial: gera o embedding da pergunta e calcula similaridade cosseno no IRIS.
-
-A busca lexical atual carrega do IRIS os chunks compatíveis com os filtros e calcula o ranking em Python. Isso mantém a regra transparente, mas deve ser substituído por um índice textual do IRIS se o volume crescer.
-
-Cada mecanismo retorna até 20 resultados. O RRF combina as posições com `k = 60`, sem tentar comparar diretamente escalas incompatíveis de pontuação, e entrega por padrão as 8 evidências mais bem posicionadas.
-
-Antes dos rankings, um planejador determinístico classifica somente as intenções que
-possuem tratamento confiável sem uma chamada adicional ao LLM:
-
-- resumo de plano de governo: amostra distribuída entre o início, o meio e o fim dos
-  chunks do documento;
-- tema específico do plano: Hybrid Search filtrada por `GOVERNMENT_PROPOSAL`;
-- temas mais frequentes: contagem SQL em `PropositionTopic`;
-- histórico parlamentar: Hybrid Search filtrada por `POLITICAL_HISTORY`;
-- proposições: Hybrid Search filtrada por `PROPOSITION`;
-- demais perguntas: Hybrid Search geral.
-
-Assim, SQL resolve agregações determinísticas, cobertura documental resolve resumos
-longos e o modelo de linguagem permanece responsável apenas pela síntese fundamentada.
-
-```mermaid
+~~~mermaid
 flowchart LR
-    Q["Consulta"] --> L["Lexical: frase e termos"]
-    Q --> E["Embedding da consulta"]
-    E --> V["Vetorial: VECTOR_COSINE"]
-    L --> LT["Ranking lexical"]
-    V --> VT["Ranking vetorial"]
-    LT --> R["RRF, k = 60"]
-    VT --> R
-    R --> K["Top K com proveniência"]
-```
+    A[Official data<br/>TSE + Chamber] --> B[Ingestion and<br/>identity resolution]
+    B --> C[(InterSystems IRIS<br/>relational + streams + vectors)]
+    C --> D[Lexical search]
+    C --> E[Vector Search]
+    D --> F[Hybrid Search<br/>RRF]
+    E --> F
+    F --> G[Enriched evidence<br/>E1...En]
+    G --> H[RAG<br/>restrictive prompt + LLM]
+    H --> I[Grounded answer<br/>+ official sources]
+~~~
 
-### 6. Prompt e geração da resposta
+The implemented path is **collect → validate → link → persist → chunk → represent → retrieve → contextualize → explain**.
 
-O serviço RAG recebe as evidências recuperadas e constrói blocos identificados como `[E1]`, `[E2]` e assim por diante. Cada bloco inclui a identidade autoritativa do candidato selecionado, título, tipo, URL oficial, metadados e trecho. As instruções do modelo exigem uso exclusivo das evidências, proíbem inferir o candidato pela lista de autores, recomendação de voto e classificação ideológica e determinam que insuficiência de contexto seja declarada explicitamente.
+## Why InterSystems IRIS?
 
-Referências internas de stream, caracteres de controle e evidências vazias são rejeitados
-antes da geração. Se a busca não retornar evidências válidas, o LLM nem é chamado. A
-geração usa uma única chamada à Responses API, não armazena a resposta no provedor e
-limita a saída. A API retorna somente as fontes citadas na resposta, mantendo os mesmos
-identificadores exibidos na interface.
+IRIS is not merely where records happen to be stored. It unifies the representations and access paths the application needs:
 
-## Aderência ao concurso
+| Capability | Verified use |
+|---|---|
+| Persistent classes | Eight <code>%Persistent</code> classes model candidates, history, bills, authors, topics, documents, chunks, and ingestion runs. |
+| SQL | Parameterized SQL handles filters, aggregates, relationships, context, and audit queries. |
+| Object API | Embedded Python uses <code>_OpenId()</code>, <code>_New()</code>, and <code>_Save()</code> for selected <code>Candidate</code> and <code>IngestionRun</code> operations. |
+| Streams | Extracted PDF text and history JSON are retained in <code>%Stream.GlobalCharacter</code>. |
+| Vector Search | 1,536-dimensional embeddings live in <code>%Vector</code>; IRIS computes <code>VECTOR_COSINE</code>. |
+| Multimodel data | Relationships, objects, streams, and vectors form one knowledge base without a separate vector database. |
+| Embedded Python | Ingestion, API, retrieval, and RAG execute in <code>IRISAPP</code>. |
+| Native WSGI | IRIS Web Gateway hosts Flask through <code>%SYS.Python.WSGI</code> at <code>/api</code>. |
+| Transactions/audit | Explicit commit/rollback units and <code>IngestionRun</code> make processing observable and repeatable. |
 
-A implementação foi confrontada com as [regras publicadas do concurso](https://community.intersystems.com/post/1st-portuguese-programming-contest-2026). A tabela diferencia o que existe no repositório do que ainda depende de preparação para a submissão.
+SQL answers deterministic questions, streams preserve source documents, vectors bridge vocabulary, and RAG joins these representations inside the IRIS-centered backend.
 
-| Critério | Evidência no projeto | Situação |
+## RAG + Hybrid Search
+
+Election data contains names, acronyms, party labels, states, offices, numbers, and IDs where exact wording matters. Human questions also express the same idea in different ways.
+
+| Mechanism | Role |
+|---|---|
+| Lexical search | Rewards exact phrases and terms after case/accent normalization. |
+| Vector Search | Embeds the query and uses IRIS <code>VECTOR_COSINE</code>. |
+| Hybrid Search | Merges rankings through RRF (<code>k=60</code>) without conflating raw scores. |
+| RAG | Gives evidence to the LLM for a cited, context-conditioned synthesis. |
+
+The LLM is not called when no valid evidence exists. Its policy requires neutral language, evidence-only claims, <code>[E1]</code>/<code>[E2]</code> citations, and an explicit statement when context is insufficient. RAG does not eliminate hallucinations; it narrows the generation space through retrieved material.
+
+## Official data sources
+
+| Source | Data used | Access |
 |---|---|---|
-| Aplicação RAG com backend InterSystems | Classes `%Persistent`, `%Vector`, SQL, WSGI e Embedded Python executam no IRIS | Implementado |
-| Dados multimodelo | Modelo relacional e representação vetorial são acessados no mesmo backend | Implementado |
-| Busca híbrida | Ranking lexical e similaridade vetorial são combinados por RRF | Implementado |
-| Acesso a API pública | CKAN/Dados Abertos do TSE e API Dados Abertos da Câmara | Implementado |
-| Estratégia de chunking e escolha de embedding | Análise, parâmetros, limitações e compatibilidade vetorial documentados acima | Documentado e implementado |
-| Clareza do pipeline RAG | Ingestão, chunking, persistência vetorial, retrieval, prompt e geração estão descritos e mapeados para o código | Documentado e implementado |
-| WSGI para a aplicação web | `IRIS Web Gateway -> %SYS.Python.WSGI -> Flask` configurado automaticamente por IPM | Implementado |
-| Foreign Table | Não há definição ou acesso a Foreign Table no repositório | Não implementado |
+| [TSE Open Data](https://dadosabertos.tse.jus.br/dataset/candidatos-2026) | 2026 candidacies and government programs when available | CKAN, ZIP, Latin-1 CSV, PDFs |
+| [Chamber Open Data](https://dadosabertos.camara.leg.br/) | Deputies, history, mandates, bills, authors, topics | Paginated REST v2 JSON |
 
-Na página oficial, WSGI aparece no bloco do tópico PyProd, enquanto este projeto concorre no tópico RAG. A arquitetura WSGI está implementada e documentada, mas sua consideração na avaliação do tópico RAG não deve ser presumida.
+Every chunk retains its source type, external ID, official URL, candidate, metadata, content hash, and passage.
 
-### Pendências para a submissão
+## Architecture
 
-O código cobre o núcleo técnico, mas a inscrição completa também depende de materiais externos ao runtime:
+~~~mermaid
+flowchart TB
+    UI[Streamlit :8501] --> API[IRIS Web Gateway :52773/api]
+    API --> WSGI[%SYS.Python.WSGI + Flask]
+    WSGI --> PY[Embedded Python]
+    PY --> OBJ[Object API]
+    PY --> SQL[SQL]
+    OBJ --> DB[(IRISAPP)]
+    SQL --> DB
+    DB --> REL[Relational data]
+    DB --> STR[Streams]
+    DB --> VEC[%Vector]
+    VEC --> RET[VECTOR_COSINE]
+    REL --> RET
+    RET --> RRF[Lexical + Vector + RRF]
+    RRF --> RAG[Context + LLM]
+    RAG --> UI
+~~~
 
-- publicar a aplicação no Open Exchange;
-- publicar um artigo na Developer Community em português, descrevendo ideia, processo, instruções, metodologia, prompts, ferramentas de IA, ajustes e alucinações observadas;
-- incluir no artigo as tags e o link da aplicação exigidos pela organização;
-- preparar a aplicação, descrição, instruções, capturas e README em inglês para o pacote enviado ao Open Exchange.
+There is no separate <code>api</code> container and no Waitress process. IRIS serves Flask; the second container contains only Streamlit.
 
-Este README permanece em PT-BR conforme a documentação de desenvolvimento do repositório. Antes do envio ao Open Exchange, a versão inglesa deve ser preparada e validada sem eliminar este passo a passo.
+## Data pipeline
 
-## 3. Pré-requisitos
+One command runs TSE candidates, government programs, Chamber matching/collection, and the RAG index. Downloads are validated, writes are idempotent, chunks default to 700 tokens with 100-token overlap, and <code>text-embedding-3-small</code> produces 1,536 dimensions.
 
-Confirme antes de avançar:
+See **[PIPELINE.md](PIPELINE.md)** for contracts, matching, transactions, pagination, hashes, failures, chunking, and retrieval. This README deliberately avoids duplicating it.
 
-- Docker Desktop ativo;
-- Docker Compose disponível;
-- acesso à imagem `intersystems/iris-community:latest-cd`;
-- portas `1972`, `52773` e `8501` livres;
-- Python 3.12 para desenvolvimento local;
-- chave OpenAI para ingestão com embeddings, `/search` e `/ask`.
+## Reproducible demo
 
-Comandos de inspeção:
+After ingestion, open <code>http://localhost:8501</code>, select a candidate — or “All candidates” — and ask a question. The UI displays the answer and its sources.
 
-```powershell
-docker version
-docker compose version
-python --version
-```
+Exercise the API without hard-coding an ID:
 
-Critério: nenhum comando deve falhar.
+~~~powershell
+$candidates = Invoke-RestMethod http://localhost:52773/api/candidates
+$candidate = $candidates.items | Select-Object -First 1
+$body = @{ question = "Which topics occur most often in this candidate's bills?"; candidateId = [int]$candidate.id } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:52773/api/ask -ContentType "application/json" -Body $body
+~~~
 
-## 4. Subir o projeto com Docker
+~~~text
+question
+  → deterministic planning
+  → structured retrieval or Hybrid Search
+  → chunk + authoritative source record
+  → [E1]...[En] context
+  → LLM
+  → answer + sources[] with official URLs
+~~~
 
-### Passo 1 — Preparar o ambiente
+No screenshots are currently committed, so this README does not present a fabricated response as a live result. Output varies with scope, date, and upstream data.
 
-Execute na raiz do projeto:
+## InterSystems 2026 Programming Contest
 
-```powershell
+The project targets the **RAG topic** in the [2026 InterSystems Portuguese Developer Community Programming Contest](https://pt.community.intersystems.com/post/concurso-de-programa%C3%A7%C3%A3o-da-comunidade-de-desenvolvedores-da-intersystems-pt-2026).
+
+| Criterion | Evidence | Status |
+|---|---|---|
+| RAG | Retrieval → context → prompt → Responses API → answer with sources | Implemented |
+| Hybrid Search | Lexical + vector rankings merged by RRF | Implemented |
+| Vector Search | <code>%Vector(DOUBLE, 1536)</code> + <code>VECTOR_COSINE</code> | Implemented |
+| Public APIs | TSE CKAN and Chamber REST v2 | Implemented |
+| Multimodel data | Relational/object + stream + vector in IRIS | Implemented |
+| Chunking | 700/100 token windows, hashes, provenance, page metadata | Implemented and explained |
+| Embeddings | <code>text-embedding-3-small</code>; same model for corpus and queries | Implemented and explained |
+| Explicit pipeline | Ingestion, chunking, vector, retrieval, prompt, generation | Implemented and documented |
+| Native WSGI | <code>%SYS.Python.WSGI</code> at <code>/api</code> | Implemented; the formal bonus belongs to PyProd |
+
+The AI-assisted method, specification prompts, human review, and real corrections are described in [ARTICLE.md](ARTICLE.md) and [ARTICLE.pt.md](ARTICLE.pt.md).
+
+## Run the project
+
+### Requirements
+
+- Docker with Compose v2;
+- access to <code>intersystems/iris-community:latest-cd</code>;
+- an OpenAI key for embeddings, vector search, and <code>/ask</code>;
+- ports <code>1972</code>, <code>52773</code>, and <code>8501</code> available;
+- Python 3.12 only for host-side development/tests.
+
+### 1. Clone
+
+This checkout has no configured <code>origin</code>, so the documentation does not guess a publication URL. Use the HTTPS URL shown on the published repository page:
+
+~~~powershell
+$repositoryUrl = Read-Host "Repository HTTPS URL"
+git clone $repositoryUrl
+Set-Location tse-iris-rag
+~~~
+
+### 2. Configure
+
+~~~powershell
 Copy-Item .env.example .env
 notepad .env
-```
+~~~
 
-Preencha, no mínimo:
+On Linux/macOS, use <code>cp .env.example .env</code>. Set at least:
 
-```dotenv
-LLM_API_KEY=sua-chave
-```
+~~~dotenv
+LLM_API_KEY=your-openai-key
+~~~
 
-A chave é dispensável para `/health` e consultas básicas. Ela é obrigatória para embeddings e respostas RAG.
+The example targets 2026, state <code>SP</code>, and offices in <code>INGEST_OFFICES</code>. Reduce scope and Chamber caps for a smaller load.
 
-### Referência completa das variáveis de ambiente
+### 3. Build and start
 
-`app.config.Settings` carrega o arquivo `.env` automaticamente quando a aplicação é
-executada diretamente no host. Os nomes não diferenciam maiúsculas de minúsculas, mas
-o projeto usa maiúsculas por convenção. Valores vazios são ignorados; por isso,
-`LLM_API_KEY=` resulta em chave ausente.
-
-No Docker Compose, o `.env` também é usado para interpolar o
-`docker-compose.yml`. Somente variáveis declaradas em `environment` são encaminhadas
-ao respectivo container. Uma variável existente no `.env`, mas não encaminhada pelo
-Compose, continua usando o padrão de `Settings` dentro do container.
-
-#### IRIS e persistência
-
-| Variável | Padrão | Onde é utilizada | Efeito |
-|---|---:|---|---|
-| `IRIS_HOST` | `localhost` | `app/database/connection.py` | Host da conexão TCP usada no desenvolvimento local. No Embedded Python dentro do IRIS, não é utilizada. |
-| `IRIS_PORT` | `1972` | `app/database/connection.py` | Porta do SuperServer para o driver DB-API local. Não controla o mapeamento de portas do Docker. |
-| `IRIS_NAMESPACE` | `IRISAPP` | `app/database/connection.py` | Namespace usado pela conexão TCP. No runtime embarcado, vale o namespace do processo IRIS. |
-| `IRIS_USERNAME` | `_SYSTEM` | `app/database/connection.py` | Usuário do driver DB-API local. Não é usado pela conexão embarcada. |
-| `IRIS_PASSWORD` | `SYS` | `app/database/connection.py` | Senha do driver DB-API local. Deve ser substituída fora do ambiente de desenvolvimento. |
-| `IRIS_SQL_SCHEMA` | `IRISPolitical_Model` | repositórios, busca, RAG e ingestão | Schema que qualifica todas as tabelas SQL. Aceita somente identificador alfanumérico iniciado por letra, com `_` opcional. |
-
-No `docker-compose.yml`, somente `IRIS_SQL_SCHEMA` é encaminhada ao container `iris`,
-e atualmente está fixada em `IRISPolitical_Model`. As demais variáveis `IRIS_*` são
-relevantes principalmente ao executar Flask, testes ou scripts Python no host.
-
-#### Fonte TSE
-
-| Variável | Padrão | Onde é utilizada | Efeito |
-|---|---:|---|---|
-| `TSE_CKAN_BASE_URL` | `https://dadosabertos.tse.jus.br/api/3/action` | `app/ingestion/tse/client.py` | Endpoint CKAN usado para descobrir o dataset e seus recursos. O código exige HTTPS e o host oficial do TSE. |
-| `TSE_DATASET_ID` | `candidatos-2026` | cliente TSE e auditoria da ingestão | Identificador consultado em `package_show`; também é gravado nos parâmetros do `IngestionRun`. |
-| `TSE_PORTAL_URL` | portal do dataset de 2026 | somente `app/config/settings.py` | Variável reservada para links de documentação/interface. Não é consumida pela ingestão atual. |
-
-No Compose, somente `TSE_DATASET_ID` é encaminhada ao container `iris`. Alterações em
-`TSE_CKAN_BASE_URL` feitas apenas no `.env` afetam a execução local, mas não o container
-sem uma entrada correspondente em `docker-compose.yml`.
-
-#### API da Câmara e controle de volume
-
-| Variável | Padrão | Onde é utilizada | Efeito |
-|---|---:|---|---|
-| `CAMARA_BASE_URL` | `https://dadosabertos.camara.leg.br/api/v2` | `app/ingestion/camara/client.py` e pipeline | Base dos endpoints de deputados, histórico, mandatos, proposições, autores e temas. O host oficial e HTTPS são obrigatórios. |
-| `CAMARA_MATCH_START_DATE` | `2020-01-01` no `.env.example` | somente `app/config/settings.py` | Configuração legada/reservada. No código atual ela não altera o matching nem a ingestão. |
-| `CAMARA_PAGE_SIZE` | `100` | `app/ingestion/camara/client.py` | Quantidade solicitada por página nas coleções da Câmara; aceita de 1 a 100. |
-| `CAMARA_LOOKBACK_YEARS` | `4` | `app/ingestion/camara/client.py` e pipeline | Calcula uma janela móvel a partir da data da execução. Filtra deputados considerados, histórico, mandatos e proposições. |
-| `CAMARA_MAX_MATCHED_CANDIDATES` | `50` | `app/ingestion/pipeline.py` | Limita quantos candidatos com correspondência recebem ingestão parlamentar detalhada em uma execução. O padrão cobre todos os candidatos correspondentes do recorte atual; o matching ainda pode ser salvo para candidatos adicionais. |
-| `CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE` | `50` | `app/ingestion/camara/client.py` | Limita as proposições mais recentes por parlamentar. A API é consultada em janelas de até três meses até atingir esse teto ou os quatro anos. |
-| `CAMARA_MAX_AUTHORS_PER_PROPOSITION` | `10` | `app/ingestion/camara/client.py` | Limita autores/apoiadores persistidos por proposição, priorizando registros marcados como proponentes. |
-| `CAMARA_HTTP_WORKERS` | `6` | `app/ingestion/pipeline.py` | Número máximo de coletas independentes de proposições executadas em paralelo. Cada worker mantém sua própria sessão HTTP; aceita de 1 a 16. |
-
-O Compose encaminha as cinco variáveis de janela, limites e concorrência. Atualmente não encaminha
-`CAMARA_BASE_URL`, `CAMARA_MATCH_START_DATE` nem `CAMARA_PAGE_SIZE`; dentro do container,
-essas três usam os padrões definidos em `Settings`.
-
-#### Recorte da ingestão e acesso HTTP
-
-| Variável | Padrão | Onde é utilizada | Efeito |
-|---|---:|---|---|
-| `INGEST_ELECTION_YEAR` | `2026` | `app/ingestion/pipeline.py` | Mantém somente candidaturas do ano configurado. |
-| `INGEST_STATES` | `SP` | pipeline TSE | Lista separada por vírgulas de UFs aceitas. Os valores são normalizados para maiúsculas. |
-| `INGEST_OFFICES` | `DEPUTADO FEDERAL,GOVERNADOR` | pipeline TSE | Lista separada por vírgulas dos cargos aceitos. Também é normalizada para maiúsculas. |
-| `HTTP_CONNECT_TIMEOUT_SECONDS` | `10` | `app/ingestion/http.py`, via pipeline | Tempo máximo para estabelecer conexão com TSE ou Câmara. |
-| `HTTP_READ_TIMEOUT_SECONDS` | `60` | `app/ingestion/http.py`, via pipeline | Tempo máximo de espera pela resposta após a conexão. |
-| `HTTP_MAX_RETRIES` | `4` | `app/ingestion/http.py`, via pipeline | Número de tentativas para falhas de conexão, timeout, `429` e erros HTTP transitórios. Aceita de 1 a 10. |
-
-O Compose encaminha `INGEST_ELECTION_YEAR`, `INGEST_STATES` e `INGEST_OFFICES`.
-Os três controles HTTP usam os padrões de `Settings` no container e podem ser alterados
-diretamente quando o pipeline é executado no host.
-
-#### Chunking, embeddings e geração de resposta
-
-| Variável | Padrão | Onde é utilizada | Efeito |
-|---|---:|---|---|
-| `CHUNK_SIZE_TOKENS` | `700` | `app/ingestion/pipeline.py` e `TokenChunker` | Tamanho-alvo de cada chunk em tokens. |
-| `CHUNK_OVERLAP_TOKENS` | `100` | `app/ingestion/pipeline.py` e `TokenChunker` | Sobreposição entre chunks consecutivos. Deve ser menor que `CHUNK_SIZE_TOKENS`. |
-| `EMBEDDING_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente `OpenAIEmbedder`. |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | ingestão, busca vetorial e fábrica de serviços | Modelo usado para tokenização e geração de embeddings. |
-| `EMBEDDING_DIMENSION` | `1536` | embedder e busca vetorial | Deve permanecer em `1536`, igual ao `LEN` de `PoliticalChunk.Embedding` no IRIS. |
-| `EMBEDDING_BATCH_SIZE` | `50` | reconstrução do índice | Quantidade de chunks enviada por chamada de embeddings; reduz requisições sem alterar a granularidade persistida. |
-| `LLM_PROVIDER` | `openai` | somente `app/config/settings.py` | Campo reservado. A implementação atual instancia diretamente o cliente OpenAI. |
-| `LLM_API_KEY` | vazio | ingestão, busca vetorial e `/ask` | Quando ausente, os chunks são preservados e o run `RAG_INDEX` fica `PARTIAL`, com a quantidade exata de embeddings pendentes. Consultas de cobertura documental e agregações SQL continuam locais. |
-| `LLM_MODEL` | `gpt-5-mini` | `app/api/services.py` | Modelo usado pela geração final de resposta no endpoint `/ask`. |
-| `LLM_MAX_OUTPUT_TOKENS` | `4000` | `app/rag/service.py` | Limite inicial da geração; respostas incompletas ou vazias recebem uma nova tentativa limitada a 8000 tokens. |
-
-No Compose, `EMBEDDING_MODEL`, `EMBEDDING_BATCH_SIZE`, `LLM_API_KEY`, `LLM_MODEL` e
-`LLM_MAX_OUTPUT_TOKENS` são encaminhadas ao container `iris`. As demais usam o padrão
-de `Settings` dentro do container.
-
-#### API Flask e interface Streamlit
-
-| Variável | Padrão | Onde é utilizada | Efeito |
-|---|---:|---|---|
-| `API_BASE_URL` | `http://localhost:52773/api` | `app/ui/streamlit_app.py` | URL que a interface usa para chamar a API. No Compose, o container `ui` recebe fixamente `http://iris:52773/api`. |
-| `API_HOST` | `0.0.0.0` | `app/api/__main__.py` | Endereço de bind somente ao executar `python -m app.api`. Não controla o WSGI nativo do IRIS. |
-| `API_PORT` | `8000` | `app/api/__main__.py` | Porta do Flask local. Não altera `/api` na porta `52773` do IRIS. |
-
-#### Variáveis internas de imagem e testes
-
-Estas variáveis não fazem parte da configuração funcional do `.env.example`:
-
-| Variável | Definida em | Finalidade |
-|---|---|---|
-| `IRISUSERNAME`, `IRISPASSWORD`, `IRISNAMESPACE` | `Dockerfile`, estágio `iris` | Convenções do runtime/ferramentas do IRIS durante build e execução embarcada. Não são os mesmos nomes `IRIS_USERNAME`, `IRIS_PASSWORD` e `IRIS_NAMESPACE` usados por `Settings`. |
-| `PATH` | `Dockerfile`, estágio `iris` | Disponibiliza `iris`, `irispython` e scripts do usuário no shell do container. |
-| `PYTHONDONTWRITEBYTECODE` | `Dockerfile`, estágio `ui` | Evita arquivos `.pyc` na imagem da interface. |
-| `PYTHONUNBUFFERED` | `Dockerfile`, estágio `ui` | Envia logs Python imediatamente para `docker compose logs`. |
-| `PIP_DISABLE_PIP_VERSION_CHECK` | `Dockerfile`, estágio `ui` | Desativa a verificação de nova versão do `pip` durante o build. |
-| `RUN_IRIS_TESTS` | `tests/test_iris_integration.py` | Quando igual a `1`, habilita testes de integração que acessam um IRIS real. |
-| `RUN_SMOKE_TESTS` | `tests/test_smoke.py` | Quando igual a `1`, habilita smoke tests que exigem o Docker Compose ativo. |
-
-`IRIS_IMAGE` é um argumento de build, não uma variável carregada por `Settings`. Ele
-permite substituir a imagem-base:
-
-```powershell
-docker compose build --build-arg IRIS_IMAGE=intersystems/iris-community:latest-cd
-```
-
-### Passo 2 — Construir as imagens
-
-Para o primeiro build ou para validar uma alteração estrutural:
-
-```powershell
-docker compose build --no-cache
-```
-
-Para o ciclo normal:
-
-```powershell
-docker compose build
-```
-
-Critério: o build deve terminar sem `ERROR`, `FAILURE`, `<SYNTAX>` ou dependências quebradas.
-
-### Passo 3 — Subir os containers
-
-```powershell
-docker compose up -d
+~~~powershell
+docker compose up --build -d
 docker compose ps
-```
+~~~
 
-Resultado esperado:
+Wait for <code>iris</code> to become healthy and <code>ui</code> to run.
 
-```text
-iris    Up ... (healthy)
-ui      Up ...
-```
+### 4. Health checks
 
-Não prossiga se o IRIS não estiver `healthy`.
-
-### Passo 4 — Inspecionar os logs
-
-```powershell
-docker compose logs --tail 100 iris
-docker compose logs --tail 100 ui
-```
-
-Para acompanhar continuamente:
-
-```powershell
-docker compose logs -f iris ui
-```
-
-Interrompa o acompanhamento com `Ctrl+C`. Os containers continuarão ativos.
-
-## 5. Testar a aplicação
-
-### Teste 1 — API WSGI
-
-```powershell
+~~~powershell
 Invoke-RestMethod http://localhost:52773/api/health
-```
-
-Resultado esperado:
-
-```text
-status
-------
-ok
-```
-
-Alternativa com curl real no Windows:
-
-```powershell
-curl.exe -i http://localhost:52773/api/health
-```
-
-Critério: HTTP `200` e corpo `{"status":"ok"}`.
-
-### Teste 2 — Consulta real ao IRISAPP
-
-```powershell
-Invoke-RestMethod http://localhost:52773/api/candidates
-```
-
-### Reconstruir somente o índice RAG
-
-Quando os dados relacionais e os textos das fontes já estiverem no IRIS, reconstrua
-chunks e embeddings sem baixar novamente TSE/Câmara:
-
-```powershell
-docker compose exec -T iris irispython -m app.ingestion.chunk_index
-```
-
-A execução é auditada em `IngestionRun` com `Source = RAG_INDEX`. Streams são
-materializados por SQL antes do chunking e os embeddings pendentes são enviados em
-lotes configurados por `EMBEDDING_BATCH_SIZE`.
-
-Validação mínima após a reconstrução:
-
-```sql
-SELECT SourceType, COUNT(*), MIN(TokenCount), MAX(TokenCount)
-FROM IRISPolitical_Model.PoliticalChunk
-GROUP BY SourceType;
-
-SELECT COUNT(*) AS InvalidStreams
-FROM IRISPolitical_Model.PoliticalChunk
-WHERE Content %CONTAINS '%Stream.GlobalCharacter';
-
-SELECT TOP 10 Source, Status, RecordsRead, RecordsCreated,
-       RecordsUpdated, RecordsSkipped, RecordsFailed
-FROM IRISPolitical_Model.IngestionRun
-ORDER BY ID DESC;
-```
-
-Resultado mínimo esperado:
-
-```json
-{"items":[]}
-```
-
-Uma lista vazia é válida antes da ingestão. HTTP `500` não é válido.
-
-### Teste 3 — Interface
-
-Abra:
-
-```text
-http://localhost:8501
-```
-
-Teste técnico:
-
-```powershell
 Invoke-WebRequest -UseBasicParsing http://localhost:8501/_stcore/health
-```
+~~~
 
-Critério: HTTP `200` e corpo `ok`.
+Expected: <code>{"status":"ok"}</code> and <code>ok</code>.
 
-### Teste 4 — Ambiente Embedded Python
+### 5. Ingest data
 
-```powershell
-docker compose exec -T iris irispython -c "from importlib.metadata import version; import wsgi_app; print(version('flask')); print(callable(wsgi_app.app))"
-docker compose exec -T iris python3 -m pip check
-```
-
-Critério: o callable deve ser `True` e o `pip check` deve informar `No broken requirements found`.
-
-## 6. Carregar dados
-
-Execute a ingestão dentro do IRIS. Este é o caminho oficial em container:
-
-```powershell
+~~~powershell
 docker compose exec iris irispython -m app.ingestion.pipeline
-```
+~~~
 
-Aguarde a conclusão. Não interrompa durante gravações no banco. Por padrão, a etapa
-da Câmara consulta somente os últimos quatro anos e mantém o volume adequado à edição
-Community: até 50 parlamentares correspondentes, 50 proposições por parlamentar e 10
-autores/apoiadores por proposição. Os limites podem ser ajustados por
-`CAMARA_LOOKBACK_YEARS`, `CAMARA_MAX_MATCHED_CANDIDATES`,
-`CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE`, `CAMARA_MAX_AUTHORS_PER_PROPOSITION` e
-`CAMARA_HTTP_WORKERS`.
+This contacts public services and creates embeddings; runtime and volume vary. To rebuild only chunks/embeddings:
 
-Depois, confirme:
+~~~powershell
+docker compose exec -T iris irispython -m app.ingestion.chunk_index
+~~~
 
-```powershell
+### 6. Validate and open
+
+~~~powershell
 Invoke-RestMethod http://localhost:52773/api/candidates
-```
+~~~
 
-Se a ingestão falhar, capture os logs antes de reiniciar:
+- UI: <code>http://localhost:8501</code>
+- API: <code>http://localhost:52773/api</code>
 
-```powershell
-docker compose logs --tail 200 iris
-```
+### 7. Local tests
 
-## 7. Rotas HTTP
-
-Base oficial em Docker:
-
-```text
-http://localhost:52773/api
-```
-
-| Método | Rota | Finalidade |
-|---|---|---|
-| `GET` | `/health` | Validar WSGI, Flask e acesso SQL ao IRIS |
-| `GET` | `/candidates` | Listar candidatos |
-| `GET` | `/candidates/{id}` | Consultar um candidato |
-| `GET` | `/candidates/{id}/propositions` | Listar proposições do candidato |
-| `POST` | `/search` | Executar busca híbrida |
-| `POST` | `/ask` | Responder com RAG e fontes |
-
-### Listar e filtrar candidatos
-
-Filtros opcionais: `name`, `party`, `state` e `office`.
-
-```powershell
-curl.exe "http://localhost:52773/api/candidates?state=SP&office=DEPUTADO%20FEDERAL"
-```
-
-### Consultar candidato
-
-```powershell
-curl.exe http://localhost:52773/api/candidates/123
-```
-
-### Consultar proposições
-
-```powershell
-curl.exe http://localhost:52773/api/candidates/123/propositions
-```
-
-### Executar busca híbrida
-
-```powershell
-curl.exe -X POST http://localhost:52773/api/search `
-  -H "Content-Type: application/json" `
-  -d '{"query":"educação pública","candidateId":123,"sourceType":"proposition","topK":8}'
-```
-
-Campos:
-
-- `query`: obrigatório; máximo de 2.000 caracteres;
-- `candidateId`: opcional; inteiro positivo;
-- `sourceType`: opcional;
-- `topK`: opcional; valor entre 1 e 50; padrão 8.
-
-### Perguntar ao RAG
-
-```powershell
-curl.exe -X POST http://localhost:52773/api/ask `
-  -H "Content-Type: application/json" `
-  -d '{"question":"Quais propostas tratam de educação?","candidateId":123}'
-```
-
-Campos:
-
-- `question`: obrigatório; máximo de 4.000 caracteres;
-- `candidateId`: opcional; inteiro positivo.
-
-Respostas de erro previstas:
-
-| HTTP | Significado |
-|---|---|
-| `400` | Corpo, filtro ou valor inválido |
-| `404` | Candidato não encontrado |
-| `500` | Falha não tratada; inspecione `WSGI.log` |
-
-## 8. Desenvolvimento Python local
-
-Use o IRIS no Docker. Execute o código Python no Windows. Esse arranjo permite breakpoints, reload e inspeção do processo.
-
-### Passo 1 — Subir somente o IRIS
-
-```powershell
-docker compose up -d iris
-docker compose ps
-```
-
-Critério: `iris` deve estar `healthy`.
-
-### Passo 2 — Criar o ambiente virtual
-
-```powershell
+~~~powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
-```
-
-O arquivo `.env` é carregado automaticamente. Confirme estes valores:
-
-```dotenv
-IRIS_HOST=localhost
-IRIS_PORT=1972
-IRIS_NAMESPACE=IRISAPP
-IRIS_USERNAME=_SYSTEM
-IRIS_PASSWORD=SYS
-```
-
-### Missão A — Executar somente a UI local
-
-Mantenha a API no WSGI nativo do IRIS:
-
-```powershell
-$env:API_BASE_URL="http://localhost:52773/api"
-python -m streamlit run app/ui/streamlit_app.py --server.port 8501
-```
-
-Use este modo para depurar a interface sem alterar o runtime oficial da API.
-
-### Missão B — Executar Flask local com reload
-
-Pare a UI do Compose para liberar a porta 8501, se necessário:
-
-```powershell
-docker compose stop ui
-```
-
-Suba o Flask local:
-
-```powershell
-python -m flask --app app.api.app:create_app --debug run --host 0.0.0.0 --port 8000
-```
-
-Base local neste modo:
-
-```text
-http://localhost:8000
-```
-
-As rotas ficam sem o prefixo `/api` porque o prefixo pertence ao mount point do IRIS:
-
-```powershell
-Invoke-RestMethod http://localhost:8000/health
-Invoke-RestMethod http://localhost:8000/candidates
-```
-
-Não use o servidor Flask de desenvolvimento em produção.
-
-### Missão C — Executar UI e Flask locais
-
-Terminal 1:
-
-```powershell
-python -m flask --app app.api.app:create_app --debug run --host 0.0.0.0 --port 8000
-```
-
-Terminal 2:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-$env:API_BASE_URL="http://localhost:8000"
-python -m streamlit run app/ui/streamlit_app.py --server.port 8501
-```
-
-Fluxo resultante:
-
-```text
-Streamlit local :8501 -> Flask local :8000 -> TCP 1972 -> IRIS no Docker
-```
-
-## 9. Debug com breakpoint remoto
-
-### Passo 1 — Iniciar o processo e aguardar o depurador
-
-```powershell
-python -m debugpy --listen 5678 --wait-for-client `
-  -m flask --app app.api.app:create_app run `
-  --no-reload --host 0.0.0.0 --port 8000
-```
-
-O processo ficará parado até o IDE conectar.
-
-### Passo 2 — Conectar o IDE
-
-Configure `Python: Attach` com:
-
-```text
-host: localhost
-port: 5678
-```
-
-### Passo 3 — Posicionar o breakpoint
-
-Posicione o breakpoint em `app/api/app.py`, `app/repositories/` ou `app/database/connection.py`. Faça uma requisição para `http://localhost:8000`.
-
-Critério: o depurador deve interromper na linha marcada.
-
-## 10. Testes automatizados
-
-Ative o ambiente virtual:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-### Testes unitários
-
-```powershell
 pytest -m unit
-```
-
-Não exigem IRIS nem rede externa.
-
-### Testes de integração com IRIS
-
-Suba o IRIS e execute:
-
-```powershell
-docker compose up -d iris
-$env:RUN_IRIS_TESTS="1"
-pytest -m integration
-Remove-Item Env:RUN_IRIS_TESTS
-```
-
-Esses testes gravam dados temporários no namespace `IRISAPP` e executam operações de repositório e busca.
-
-### Smoke tests dos serviços
-
-Suba os dois serviços e execute:
-
-```powershell
-docker compose up -d
-$env:RUN_SMOKE_TESTS="1"
-pytest -m smoke
-Remove-Item Env:RUN_SMOKE_TESTS
-```
-
-### Qualidade estática
-
-```powershell
 ruff check app tests wsgi_app.py
 mypy app wsgi_app.py
-```
+~~~
 
-Ordem de aceite:
+Integration and smoke suites require live IRIS/Docker plus <code>RUN_IRIS_TESTS=1</code> and <code>RUN_SMOKE_TESTS=1</code>, respectively.
 
-1. Execute testes unitários.
-2. Execute análise estática.
-3. Execute testes de integração.
-4. Execute smoke tests.
-5. Não entregue código com falha conhecida.
+## Essential troubleshooting
 
-## 11. Parar e limpar
+| Symptom | Action |
+|---|---|
+| IRIS is unhealthy | <code>docker compose logs --tail 200 iris</code> |
+| API returns 500 | <code>docker compose exec -T iris sh -lc "tail -100 /usr/irissys/mgr/WSGI.log"</code> |
+| Candidate list is empty | Run ingestion; check the key, <code>INGEST_*</code> filters, and logs. |
+| <code>RAG_INDEX</code> is partial | Check the key; chunks may lack embeddings. |
+| UI cannot reach API | Container uses <code>http://iris:52773/api</code>; host uses <code>http://localhost:52773/api</code>. |
+| WSGI serves old code | Rebuild/recreate <code>iris</code>; imported modules may be cached. |
 
-Parar sem remover containers:
+<code>docker compose down</code> preserves the volume. <code>docker compose down -v</code> **deletes IRIS project data**.
 
-```powershell
-docker compose stop
-```
+## Project structure
 
-Remover containers e preservar dados:
+~~~text
+app/
+├── api/          # Flask and HTTP contracts
+├── config/       # validated settings
+├── database/     # SQL, DB-API, Object API, transactions
+├── embeddings/   # embeddings
+├── ingestion/    # TSE, Chamber, matching, chunking
+├── rag/          # context, prompt, generation
+├── repositories/ # IRIS persistence
+├── retrieval/    # structured, lexical, vector, RRF
+└── ui/           # Streamlit
+iris/             # eight ObjectScript classes
+tests/            # unit, integration, smoke
+docs/             # specifications, decisions, audits
+~~~
 
-```powershell
-docker compose down
-```
+## Documentation
 
-Remover containers e apagar o volume IRIS:
+- [Technical pipeline](PIPELINE.md)
+- [Product specification](docs/SPEC%20%E2%80%94%20IRIS%20Political%20Insight.md)
+- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
+- [TSE + Chamber + IRIS ingestion](docs/IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md)
+- [IRIS classes and mappings](docs/CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md)
+- [Native WSGI migration](docs/MIGRACAO_FLASK_WAITRESS_PARA_IRIS_WSGI.md)
+- [English technical article](ARTICLE.md)
 
-```powershell
-docker compose down -v
-```
+## License and responsibility
 
-> ATENÇÃO: `docker compose down -v` apaga os dados persistidos pelo projeto. Use somente quando a perda for intencional.
+Released under the [MIT License](LICENSE).
 
-## 12. Diagnóstico
-
-### API retorna HTTP 500
-
-Execute:
-
-```powershell
-docker compose exec -T iris sh -lc "tail -100 /usr/irissys/mgr/WSGI.log"
-docker compose logs --tail 200 iris
-```
-
-### API retorna HTTP 401 ou 403
-
-Verifique a Web Application `/api`, a autenticação e os papéis associados. Para este MVP/dev, a configuração esperada é:
-
-```text
-AutheEnabled = 64
-MatchRoles   = :%All
-```
-
-### Alteração Python não aparece no WSGI
-
-Reconstrua e recrie o IRIS:
-
-```powershell
-docker compose build iris
-docker compose up -d --force-recreate iris
-```
-
-O IRIS mantém módulos Python em memória. Reinicie o serviço após alterar código carregado pelo WSGI.
-
-### Flask local não conecta ao IRIS
-
-Confirme:
-
-```powershell
-docker compose ps iris
-Test-NetConnection localhost -Port 1972
-```
-
-Revise `IRIS_HOST`, `IRIS_PORT`, `IRIS_NAMESPACE`, `IRIS_USERNAME` e `IRIS_PASSWORD` no `.env`.
-
-### UI não acessa a API
-
-No Docker, use:
-
-```text
-API_BASE_URL=http://iris:52773/api
-```
-
-No host, use:
-
-```text
-API_BASE_URL=http://localhost:52773/api
-```
-
-No modo Flask local, use:
-
-```text
-API_BASE_URL=http://localhost:8000
-```
-
-## 13. WSGI e segurança
-
-Configuração instalada automaticamente pelo IPM:
-
-```text
-URL               = /api
-NameSpace         = IRISAPP
-DispatchClass     = %SYS.Python.WSGI
-WSGIAppLocation   = /usr/irissys/lib/iris-political-insight/
-WSGIAppName       = wsgi_app
-WSGICallable      = app
-```
-
-As dependências da API são instaladas em `/usr/irissys/mgr/python`, diretório acessível ao Embedded Python do IRIS.
-
-> SEGURANÇA: o acesso não autenticado recebe `%All` somente neste MVP de desenvolvimento. Antes de publicar, habilite autenticação e substitua `%All` por papéis de privilégio mínimo.
-
-Credenciais padrão locais:
-
-```text
-usuário: _SYSTEM
-senha:   SYS
-```
-
-Troque essas credenciais fora do ambiente local.
-
-## 14. Documentação
-
-- [Especificação do produto](docs/SPEC%20%E2%80%94%20IRIS%20Political%20Insight.md)
-- [Plano de implementação](docs/IMPLEMENTATION_PLAN.md)
-- [Tecnologias e bibliotecas](docs/IMPLEMENTACAO_TECNICA_TECNOLOGIAS_E_LIBS.md)
-- [Ingestão TSE, Câmara e IRIS](docs/IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md)
-- [Classes IRIS e mapeamento](docs/CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md)
-- [Migração para WSGI nativo](docs/MIGRACAO_FLASK_WAITRESS_PARA_IRIS_WSGI.md)
-- [WSGI no InterSystems IRIS](https://docs.intersystems.com/irislatest/csp/docbook/DocBook.UI.Page.cls?KEY=AWSGI)
-- [Embedded Python](https://docs.intersystems.com/irislatest/csp/docbook/DocBook.UI.Page.cls?KEY=GEPYTHON)
-- [Instalação de pacotes Python](https://docs.intersystems.com/irislatest/csp/docbook/DocBook.UI.Page.cls?KEY=GEPYTHON_loadlib)
-
-## 15. Comandos rápidos
-
-```powershell
-# Subir
-docker compose up --build -d
-
-# Estado
-docker compose ps
-
-# Health
-Invoke-RestMethod http://localhost:52773/api/health
-
-# Logs
-docker compose logs --tail 100 iris ui
-
-# Testes unitários
-pytest -m unit
-
-# Parar preservando dados
-docker compose down
-```
-
-No Linux ou macOS, troque `Copy-Item` por `cp` e ative o ambiente com:
-
-```bash
-source .venv/bin/activate
-```
+Independent project with no affiliation to the TSE, Chamber, candidates, or parties. It organizes public information and does not replace official sources or voter judgment.
