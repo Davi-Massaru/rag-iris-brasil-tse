@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     camara_max_matched_candidates: int = Field(default=50, gt=0, le=100)
     camara_max_propositions_per_candidate: int = Field(default=50, gt=0, le=1000)
     camara_max_authors_per_proposition: int = Field(default=10, gt=0, le=100)
+    camara_http_workers: int = Field(default=6, gt=0, le=16)
 
     ingest_election_year: int = Field(default=2026, gt=2000)
     ingest_states: CsvTuple = ("SP",)

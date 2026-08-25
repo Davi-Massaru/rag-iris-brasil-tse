@@ -21,7 +21,12 @@ class PoliticalChunkBuilder:
         self.authors = authors
         self.topics = topics
 
-    def proposition(self, row: tuple) -> tuple[ChunkWrite, ...]:
+    def proposition(
+        self,
+        row: tuple,
+        author_names: tuple[str, ...] | None = None,
+        topic_names: tuple[str, ...] | None = None,
+    ) -> tuple[ChunkWrite, ...]:
         proposition_id, candidate_id, camara_id, title, summary, detail, status, url, collected = (
             row
         )
@@ -29,8 +34,8 @@ class PoliticalChunkBuilder:
             line
             for line in (
                 f"Título: {title}",
-                f"Autores: {'; '.join(self.authors.names(int(proposition_id)))}",
-                f"Temas: {'; '.join(self.topics.names(int(proposition_id)))}",
+                f"Autores: {'; '.join(author_names if author_names is not None else self.authors.names(int(proposition_id)))}",
+                f"Temas: {'; '.join(topic_names if topic_names is not None else self.topics.names(int(proposition_id)))}",
                 f"Ementa: {summary or ''}",
                 f"Ementa detalhada: {detail or ''}",
                 f"Situação: {status or ''}",

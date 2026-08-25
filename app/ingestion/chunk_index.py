@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Callable, Sequence
 
 from app.config import Settings, get_settings
@@ -19,6 +20,7 @@ from app.repositories import (
 )
 
 LOGGER = logging.getLogger(__name__)
+CONTEXT_BATCH_SIZE = 200
 
 
 class ChunkIndexPipeline:
@@ -68,21 +70,44 @@ class ChunkIndexPipeline:
             repaired = propositions.repair_invalid_years()
             if repaired:
                 runs.increment(run_id, "RecordsUpdated", repaired)
-        sources = (
-            (propositions.list_for_chunks(), builder.proposition),
-            (documents.list_for_chunks(), builder.document),
-            (histories.list_for_chunks(), builder.history),
+        proposition_rows = propositions.list_for_chunks()
+        proposition_ids = tuple(int(row[0]) for row in proposition_rows)
+        author_context = self._load_context(
+            proposition_ids,
+            builder.authors.context_by_proposition_ids,
         )
-        for rows, build in sources:
-            for row in rows:
-                runs.increment(run_id, "RecordsRead")
-                values = build(row)
-                if not values:
-                    runs.increment(run_id, "RecordsFailed")
-                    raise ValueError("source produced no recoverable chunks")
-                with transaction(connection):
-                    results = chunks.replace_source(values)
-                    self._record(runs, run_id, results)
+        topic_context = self._load_context(
+            proposition_ids,
+            builder.topics.context_by_proposition_ids,
+        )
+        self._index_rows(
+            connection,
+            runs,
+            run_id,
+            chunks,
+            proposition_rows,
+            lambda row: builder.proposition(
+                row,
+                tuple(item["name"] for item in author_context.get(int(row[0]), ())),
+                tuple(item["name"] for item in topic_context.get(int(row[0]), ())),
+            ),
+        )
+        self._index_rows(
+            connection,
+            runs,
+            run_id,
+            chunks,
+            documents.list_for_chunks(),
+            builder.document,
+        )
+        self._index_rows(
+            connection,
+            runs,
+            run_id,
+            chunks,
+            histories.list_for_chunks(),
+            builder.history,
+        )
         pending = chunks.without_embedding(self.settings.embedding_batch_size)
         if pending and not self.settings.llm_api_key:
             pending_count = chunks.pending_embedding_count()
@@ -102,8 +127,8 @@ class ChunkIndexPipeline:
             with transaction(connection):
                 for chunk, vector in zip(pending, vectors, strict=True):
                     chunks.update_embedding(chunk.id, vector, embedder.model)
-                    runs.increment(run_id, "RecordsUpdated")
                     embedded += 1
+                runs.increment(run_id, "RecordsUpdated", len(pending))
             LOGGER.info("embedding batch completed total_embedded=%d", embedded)
             pending = chunks.without_embedding(self.settings.embedding_batch_size)
         runs.finish(run_id, "SUCCESS")
@@ -111,14 +136,44 @@ class ChunkIndexPipeline:
         LOGGER.info("RAG index completed run_id=%d embedded=%d", run_id, embedded)
 
     @staticmethod
-    def _record(
+    def _index_rows(
+        connection,  # noqa: ANN001
         runs: IngestionRunRepository,
         run_id: int,
-        results: Sequence[UpsertResult],
+        chunks: PoliticalChunkRepository,
+        rows: Sequence[tuple],
+        build: Callable[[tuple], Sequence],
     ) -> None:
+        for row in rows:
+            values = build(row)
+            if not values:
+                with transaction(connection):
+                    runs.increment_many(
+                        run_id,
+                        {"RecordsRead": 1, "RecordsFailed": 1},
+                    )
+                raise ValueError("source produced no recoverable chunks")
+            with transaction(connection):
+                results = chunks.replace_source(values)
+                counters = Counter({"RecordsRead": 1})
+                ChunkIndexPipeline._record(counters, results)
+                runs.increment_many(run_id, counters)
+
+    @staticmethod
+    def _record(counters: Counter[str], results: Sequence[UpsertResult]) -> None:
         for result in results:
             column = "RecordsCreated" if result.action == "INSERTED" else "RecordsSkipped"
-            runs.increment(run_id, column)
+            counters[column] += 1
+
+    @staticmethod
+    def _load_context(
+        proposition_ids: Sequence[int],
+        loader: Callable[[Sequence[int]], dict[int, list[dict]]],
+    ) -> dict[int, list[dict]]:
+        context: dict[int, list[dict]] = {}
+        for start in range(0, len(proposition_ids), CONTEXT_BATCH_SIZE):
+            context.update(loader(proposition_ids[start : start + CONTEXT_BATCH_SIZE]))
+        return context
 
     def _openai_embedder(self) -> OpenAIEmbedder:
         return OpenAIEmbedder(

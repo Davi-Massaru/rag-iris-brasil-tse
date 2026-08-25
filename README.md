@@ -289,8 +289,9 @@ sem uma entrada correspondente em `docker-compose.yml`.
 | `CAMARA_MAX_MATCHED_CANDIDATES` | `50` | `app/ingestion/pipeline.py` | Limita quantos candidatos com correspondência recebem ingestão parlamentar detalhada em uma execução. O padrão cobre todos os candidatos correspondentes do recorte atual; o matching ainda pode ser salvo para candidatos adicionais. |
 | `CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE` | `50` | `app/ingestion/camara/client.py` | Limita as proposições mais recentes por parlamentar. A API é consultada em janelas de até três meses até atingir esse teto ou os quatro anos. |
 | `CAMARA_MAX_AUTHORS_PER_PROPOSITION` | `10` | `app/ingestion/camara/client.py` | Limita autores/apoiadores persistidos por proposição, priorizando registros marcados como proponentes. |
+| `CAMARA_HTTP_WORKERS` | `6` | `app/ingestion/pipeline.py` | Número máximo de coletas independentes de proposições executadas em paralelo. Cada worker mantém sua própria sessão HTTP; aceita de 1 a 16. |
 
-O Compose encaminha as quatro variáveis de janela e limites. Atualmente não encaminha
+O Compose encaminha as cinco variáveis de janela, limites e concorrência. Atualmente não encaminha
 `CAMARA_BASE_URL`, `CAMARA_MATCH_START_DATE` nem `CAMARA_PAGE_SIZE`; dentro do container,
 essas três usam os padrões definidos em `Settings`.
 
@@ -507,10 +508,11 @@ docker compose exec iris irispython -m app.ingestion.pipeline
 
 Aguarde a conclusão. Não interrompa durante gravações no banco. Por padrão, a etapa
 da Câmara consulta somente os últimos quatro anos e mantém o volume adequado à edição
-Community: até 10 parlamentares correspondentes, 50 proposições por parlamentar e 10
+Community: até 50 parlamentares correspondentes, 50 proposições por parlamentar e 10
 autores/apoiadores por proposição. Os limites podem ser ajustados por
 `CAMARA_LOOKBACK_YEARS`, `CAMARA_MAX_MATCHED_CANDIDATES`,
-`CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE` e `CAMARA_MAX_AUTHORS_PER_PROPOSITION`.
+`CAMARA_MAX_PROPOSITIONS_PER_CANDIDATE`, `CAMARA_MAX_AUTHORS_PER_PROPOSITION` e
+`CAMARA_HTTP_WORKERS`.
 
 Depois, confirme:
 

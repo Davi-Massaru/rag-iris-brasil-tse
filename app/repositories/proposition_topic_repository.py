@@ -33,6 +33,57 @@ class PropositionTopicRepository(RepositorySupport):
         )
         return UpsertResult(int(inserted[0]), "INSERTED")
 
+    def upsert_many(self, values: Sequence[TopicWrite]) -> list[UpsertResult]:
+        if not values:
+            return []
+        proposition_id = values[0].proposition_id
+        if any(value.proposition_id != proposition_id for value in values):
+            raise ValueError("topics must share one proposition")
+        unique_values = list({value.name: value for value in values}.values())
+        rows = self.all(
+            f"SELECT ID,ExternalCode,Name FROM {self.table('PropositionTopic')} WHERE Proposition=?",
+            (proposition_id,),
+        )
+        by_name = {str(row[2]): row for row in rows}
+        results: list[UpsertResult | None] = []
+        inserted_names: list[str] = []
+        for value in unique_values:
+            row = by_name.get(value.name)
+            if row and row[1] == value.external_code:
+                results.append(UpsertResult(int(row[0]), "UNCHANGED"))
+                continue
+            if row:
+                self.execute(
+                    f"UPDATE {self.table('PropositionTopic')} SET ExternalCode=?,UpdatedAt=? WHERE ID=?",
+                    (value.external_code, utc_now(), int(row[0])),
+                )
+                results.append(UpsertResult(int(row[0]), "UPDATED"))
+                continue
+            now = utc_now()
+            self.execute(
+                f"""INSERT INTO {self.table("PropositionTopic")}
+                (Proposition,ExternalCode,Name,CreatedAt,UpdatedAt) VALUES (?,?,?,?,?)""",
+                (proposition_id, value.external_code, value.name, now, now),
+            )
+            inserted_names.append(value.name)
+            results.append(None)
+        if inserted_names:
+            rows = self.all(
+                f"SELECT ID,Name FROM {self.table('PropositionTopic')} WHERE Proposition=?",
+                (proposition_id,),
+            )
+            inserted_ids = {str(row[1]): int(row[0]) for row in rows}
+        else:
+            inserted_ids = {}
+        names = iter(inserted_names)
+        resolved: list[UpsertResult] = []
+        for result in results:
+            if result is not None:
+                resolved.append(result)
+                continue
+            resolved.append(UpsertResult(inserted_ids[next(names)], "INSERTED"))
+        return resolved
+
     def names(self, proposition_id: int) -> tuple[str, ...]:
         rows = self.all(
             f"SELECT Name FROM {self.table('PropositionTopic')} WHERE Proposition=? ORDER BY Name",

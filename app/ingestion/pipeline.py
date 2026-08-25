@@ -3,6 +3,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import tempfile
+import threading
+from collections import Counter
+from concurrent.futures import Executor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -56,6 +59,9 @@ class IngestionPipeline:
         )
         self.tse = TseClient(settings, self.http)
         self.camara = CamaraClient(settings, self.http)
+        self._worker_local = threading.local()
+        self._worker_clients: list[HttpClient] = []
+        self._worker_clients_lock = threading.Lock()
 
     def run(self) -> None:
         LOGGER.info(
@@ -94,26 +100,28 @@ class IngestionPipeline:
             try:
                 for start in range(0, len(rows), 500):
                     with transaction(connection):
+                        counters: Counter[str] = Counter()
                         for row in rows[start : start + 500]:
-                            runs.increment(run.id, "RecordsRead")
+                            counters["RecordsRead"] += 1
                             if row.candidate is None:
                                 run.failures += 1
-                                runs.increment(run.id, "RecordsFailed")
+                                counters["RecordsFailed"] += 1
                                 continue
                             raw = row.candidate
                             if raw.election_year != self.settings.ingest_election_year:
-                                runs.increment(run.id, "RecordsSkipped")
+                                counters["RecordsSkipped"] += 1
                                 continue
                             if (
                                 raw.state not in self.settings.ingest_states
                                 or raw.office_name not in self.settings.ingest_offices
                             ):
-                                runs.increment(run.id, "RecordsSkipped")
+                                counters["RecordsSkipped"] += 1
                                 continue
                             result = candidates.upsert(
                                 to_candidate(raw, resource.url, artifact.collected_at)
                             )
-                            self._record(runs, run, result)
+                            self._record(counters, run, result)
+                        runs.increment_many(run.id, counters)
                     LOGGER.info(
                         "ingestion progress stage=TSE_CANDIDATES run_id=%d processed=%d total=%d",
                         run.id,
@@ -148,29 +156,32 @@ class IngestionPipeline:
                     resource_records = 0
                     for proposal in read_proposals(artifact.path):
                         resource_records += 1
-                        runs.increment(run.id, "RecordsRead")
-                        candidate = candidates.find_by_tse_id(proposal.tse_id)
-                        if candidate is None:
-                            runs.increment(run.id, "RecordsSkipped")
-                            continue
-                        if not proposal.text:
-                            run.failures += 1
-                            runs.increment(run.id, "RecordsFailed")
-                            continue
-                        title = f"Proposta de governo - {candidate.ballot_name or candidate.name} - documento {proposal.sequence}"
-                        value = ProposalDocumentWrite(
-                            candidate.id,
-                            proposal.year,
-                            title,
-                            resource.url,
-                            resource.id,
-                            proposal.file_name,
-                            proposal.document_hash,
-                            proposal.text,
-                            artifact.collected_at,
-                        )
                         with transaction(connection):
-                            self._record(runs, run, documents.upsert(value))
+                            counters = Counter({"RecordsRead": 1})
+                            candidate = candidates.find_by_tse_id(proposal.tse_id)
+                            if candidate is None:
+                                counters["RecordsSkipped"] += 1
+                                runs.increment_many(run.id, counters)
+                                continue
+                            if not proposal.text:
+                                run.failures += 1
+                                counters["RecordsFailed"] += 1
+                                runs.increment_many(run.id, counters)
+                                continue
+                            title = f"Proposta de governo - {candidate.ballot_name or candidate.name} - documento {proposal.sequence}"
+                            value = ProposalDocumentWrite(
+                                candidate.id,
+                                proposal.year,
+                                title,
+                                resource.url,
+                                resource.id,
+                                proposal.file_name,
+                                proposal.document_hash,
+                                proposal.text,
+                                artifact.collected_at,
+                            )
+                            self._record(counters, run, documents.upsert(value))
+                            runs.increment_many(run.id, counters)
                     LOGGER.info(
                         "TSE proposal artifact processed run_id=%d resource_id=%s records=%d sha256=%s",
                         run.id,
@@ -204,41 +215,52 @@ class IngestionPipeline:
             )
             ingested_candidates = 0
             try:
-                for index, candidate in enumerate(candidates_to_match, start=1):
-                    runs.increment(run.id, "RecordsRead")
-                    match = matcher.match(candidate)
-                    with transaction(connection):
-                        candidates.save_match(candidate.id, match)
-                    if match.deputy_id is None:
-                        runs.increment(run.id, "RecordsSkipped")
-                        continue
-                    if ingested_candidates >= self.settings.camara_max_matched_candidates:
-                        runs.increment(run.id, "RecordsSkipped")
-                        continue
-                    ingested_candidates += 1
-                    self._candidate_camara(
-                        connection,
-                        run,
-                        runs,
-                        candidate.id,
-                        match.deputy_id,
-                        histories,
-                        propositions,
-                        authors,
-                        topics,
-                    )
-                    if index % 25 == 0 or index == len(candidates_to_match):
-                        LOGGER.info(
-                            "ingestion progress stage=CAMARA run_id=%d processed=%d total=%d",
-                            run.id,
-                            index,
-                            len(candidates_to_match),
+                with ThreadPoolExecutor(
+                    max_workers=self.settings.camara_http_workers,
+                    thread_name_prefix="camara-http",
+                ) as executor:
+                    for index, candidate in enumerate(candidates_to_match, start=1):
+                        match = matcher.match(candidate)
+                        counters = Counter({"RecordsRead": 1})
+                        if (
+                            match.deputy_id is None
+                            or ingested_candidates >= self.settings.camara_max_matched_candidates
+                        ):
+                            counters["RecordsSkipped"] += 1
+                        with transaction(connection):
+                            candidates.save_match(candidate.id, match)
+                            runs.increment_many(run.id, counters)
+                        if match.deputy_id is None:
+                            continue
+                        if ingested_candidates >= self.settings.camara_max_matched_candidates:
+                            continue
+                        ingested_candidates += 1
+                        self._candidate_camara(
+                            connection,
+                            run,
+                            runs,
+                            candidate.id,
+                            match.deputy_id,
+                            histories,
+                            propositions,
+                            authors,
+                            topics,
+                            executor,
                         )
+                        if index % 25 == 0 or index == len(candidates_to_match):
+                            LOGGER.info(
+                                "ingestion progress stage=CAMARA run_id=%d processed=%d total=%d",
+                                run.id,
+                                index,
+                                len(candidates_to_match),
+                            )
                 self._finish(runs, run)
                 connection.commit()
             except Exception as exc:
                 self._fail(runs, run, exc, connection)
                 raise
+            finally:
+                self._close_worker_clients()
 
     def _candidate_camara(
         self,
@@ -251,6 +273,7 @@ class IngestionPipeline:
         propositions: PropositionRepository,
         authors: PropositionAuthorRepository,
         topics: PropositionTopicRepository,
+        executor: Executor,
     ) -> None:
         collected = utc_now()
         base = self.settings.camara_base_url.rstrip("/")
@@ -276,6 +299,7 @@ class IngestionPipeline:
             self.settings.camara_max_authors_per_proposition,
         )
         with transaction(connection):
+            counters: Counter[str] = Counter()
             for history_item in history_items:
                 result = histories.upsert(
                     history_write(
@@ -286,7 +310,7 @@ class IngestionPipeline:
                         collected,
                     )
                 )
-                self._record(runs, run, result)
+                self._record(counters, run, result)
             for mandate_item in mandates:
                 result = histories.upsert(
                     mandate_write(
@@ -297,29 +321,33 @@ class IngestionPipeline:
                         collected,
                     )
                 )
-                self._record(runs, run, result)
-        for summary in self.camara.propositions(deputy_id):
+                self._record(counters, run, result)
+            runs.increment_many(run.id, counters)
+        summaries = tuple(self.camara.propositions(deputy_id))
+        futures = {
+            executor.submit(self._proposition_bundle, summary.id): summary for summary in summaries
+        }
+        for future in as_completed(futures):
+            summary = futures[future]
             try:
-                detail = self.camara.proposition(summary.id)
-                external_authors = self.camara.authors(summary.id)
-                external_topics = self.camara.topics(summary.id)
+                detail, external_authors, external_topics = future.result()
                 with transaction(connection):
+                    counters = Counter()
                     proposition = propositions.upsert(
                         proposition_write(candidate_id, detail, collected)
                     )
-                    self._record(runs, run, proposition)
-                    for author_item in external_authors:
-                        self._record(
-                            runs,
-                            run,
-                            authors.upsert(author_write(proposition.id, author_item)),
-                        )
-                    for topic_item in external_topics:
-                        self._record(
-                            runs,
-                            run,
-                            topics.upsert(topic_write(proposition.id, topic_item)),
-                        )
+                    self._record(counters, run, proposition)
+                    author_values = tuple(
+                        author_write(proposition.id, item) for item in external_authors
+                    )
+                    topic_values = tuple(
+                        topic_write(proposition.id, item) for item in external_topics
+                    )
+                    for result in authors.upsert_many(author_values):
+                        self._record(counters, run, result)
+                    for result in topics.upsert_many(topic_values):
+                        self._record(counters, run, result)
+                    runs.increment_many(run.id, counters)
             except Exception:
                 run.failures += 1
                 with transaction(connection):
@@ -330,6 +358,30 @@ class IngestionPipeline:
                     summary.id,
                     candidate_id,
                 )
+
+    def _proposition_bundle(self, proposition_id: int):  # noqa: ANN202
+        client = getattr(self._worker_local, "camara", None)
+        if client is None:
+            http = HttpClient(
+                self.settings.http_connect_timeout_seconds,
+                self.settings.http_read_timeout_seconds,
+                self.settings.http_max_retries,
+            )
+            client = CamaraClient(self.settings, http)
+            self._worker_local.camara = client
+            with self._worker_clients_lock:
+                self._worker_clients.append(http)
+        return (
+            client.proposition(proposition_id),
+            client.authors(proposition_id),
+            client.topics(proposition_id),
+        )
+
+    def _close_worker_clients(self) -> None:
+        with self._worker_clients_lock:
+            clients, self._worker_clients = self._worker_clients, []
+        for client in clients:
+            client.close()
 
     def _chunks_and_embeddings(self) -> None:
         LOGGER.info("RAG index stage started")
@@ -351,14 +403,14 @@ class IngestionPipeline:
         }
 
     @staticmethod
-    def _record(runs: IngestionRunRepository, state: RunState, result: UpsertResult) -> None:
+    def _record(counters: Counter[str], state: RunState, result: UpsertResult) -> None:
         column = {
             "INSERTED": "RecordsCreated",
             "UPDATED": "RecordsUpdated",
             "UPDATED_CONFLICT": "RecordsUpdated",
             "UNCHANGED": "RecordsSkipped",
         }[result.action]
-        runs.increment(state.id, column)
+        counters[column] += 1
         state.successes += 1
 
     @staticmethod

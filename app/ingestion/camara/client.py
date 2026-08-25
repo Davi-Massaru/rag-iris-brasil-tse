@@ -36,6 +36,8 @@ class CamaraClient:
         self.http = http
         self.base_url = settings.camara_base_url.rstrip("/")
         self._deputies_by_state: dict[str, tuple[DeputySummary, ...]] = {}
+        self._deputy_details: dict[int, DeputyDetail] = {}
+        self._history_by_deputy: dict[int, tuple[HistoryItem, ...]] = {}
 
     @property
     def lookback_start(self) -> date:
@@ -53,7 +55,9 @@ class CamaraClient:
         target = _name_terms(name)
         if not target:
             return ()
-        exact = tuple(item for item in summaries if _normalize_name(item.nome) == _normalize_name(name))
+        exact = tuple(
+            item for item in summaries if _normalize_name(item.nome) == _normalize_name(name)
+        )
         if exact:
             return exact
         return tuple(item for item in summaries if _compatible_name_terms(target, item.nome))
@@ -78,13 +82,21 @@ class CamaraClient:
         return result
 
     def deputy(self, deputy_id: int) -> DeputyDetail:
-        return self._model(DeputyDetail, self._entity(f"/deputados/{deputy_id}"))
+        cached = self._deputy_details.get(deputy_id)
+        if cached is None:
+            cached = self._model(DeputyDetail, self._entity(f"/deputados/{deputy_id}"))
+            self._deputy_details[deputy_id] = cached
+        return cached
 
     def history(self, deputy_id: int) -> tuple[HistoryItem, ...]:
-        return tuple(
-            self._model(HistoryItem, item)
-            for item in self._collection(f"/deputados/{deputy_id}/historico")
-        )
+        cached = self._history_by_deputy.get(deputy_id)
+        if cached is None:
+            cached = tuple(
+                self._model(HistoryItem, item)
+                for item in self._collection(f"/deputados/{deputy_id}/historico")
+            )
+            self._history_by_deputy[deputy_id] = cached
+        return cached
 
     def external_mandates(self, deputy_id: int) -> tuple[ExternalMandate, ...]:
         return tuple(

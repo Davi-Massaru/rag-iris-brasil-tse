@@ -82,6 +82,9 @@ class HttpClient:
             raise ExternalContractError("JSON root must be an object")
         return payload
 
+    def close(self) -> None:
+        self.session.close()
+
     @staticmethod
     def chunks(response: requests.Response, size: int = 1024 * 1024) -> Iterator[bytes]:
         yield from (chunk for chunk in response.iter_content(size) if chunk)

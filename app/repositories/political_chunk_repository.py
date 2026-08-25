@@ -21,12 +21,37 @@ class PoliticalChunkRepository(RepositorySupport):
             WHERE Candidate=? AND SourceType=? AND SourceId=?""",
             source,
         )
+        existing = {(int(row[1]), str(row[2])): int(row[0]) for row in rows}
         for row in rows:
             if (int(row[1]), str(row[2])) not in keep:
                 self.execute(
                     f"DELETE FROM {self.table('PoliticalChunk')} WHERE ID=?", (int(row[0]),)
                 )
-        return [self.upsert(item) for item in chunks]
+        results: list[UpsertResult | None] = []
+        inserted = False
+        for item in chunks:
+            current_id = existing.get((item.chunk_index, item.content_hash))
+            if current_id is not None:
+                results.append(UpsertResult(current_id, "UNCHANGED"))
+                continue
+            self._insert(item)
+            results.append(None)
+            inserted = True
+        if inserted:
+            rows = self.all(
+                f"""SELECT ID,ChunkIndex,ContentHash FROM {self.table("PoliticalChunk")}
+                WHERE Candidate=? AND SourceType=? AND SourceId=?""",
+                source,
+            )
+            current = {(int(row[1]), str(row[2])): int(row[0]) for row in rows}
+        else:
+            current = existing
+        return [
+            result
+            if result is not None
+            else UpsertResult(current[(item.chunk_index, item.content_hash)], "INSERTED")
+            for item, result in zip(chunks, results, strict=True)
+        ]
 
     def upsert(self, value: ChunkWrite) -> UpsertResult:
         row = self.one(
@@ -43,6 +68,22 @@ class PoliticalChunkRepository(RepositorySupport):
         )
         if row:
             return UpsertResult(int(row[0]), "UNCHANGED")
+        self._insert(value)
+        inserted = self.one(
+            f"""SELECT ID FROM {self.table("PoliticalChunk")}
+            WHERE Candidate=? AND SourceType=? AND SourceId=?
+            AND ChunkIndex=? AND ContentHash=?""",
+            (
+                value.candidate_id,
+                value.source_type,
+                value.source_id,
+                value.chunk_index,
+                value.content_hash,
+            ),
+        )
+        return UpsertResult(int(inserted[0]), "INSERTED")
+
+    def _insert(self, value: ChunkWrite) -> None:
         now = utc_now()
         self.execute(
             f"""INSERT INTO {self.table("PoliticalChunk")}
@@ -65,19 +106,6 @@ class PoliticalChunkRepository(RepositorySupport):
                 now,
             ),
         )
-        inserted = self.one(
-            f"""SELECT ID FROM {self.table("PoliticalChunk")}
-            WHERE Candidate=? AND SourceType=? AND SourceId=?
-            AND ChunkIndex=? AND ContentHash=?""",
-            (
-                value.candidate_id,
-                value.source_type,
-                value.source_id,
-                value.chunk_index,
-                value.content_hash,
-            ),
-        )
-        return UpsertResult(int(inserted[0]), "INSERTED")
 
     def without_embedding(self, limit: int = 100) -> list[Chunk]:
         rows = self.all(

@@ -44,6 +44,64 @@ class PropositionAuthorRepository(RepositorySupport):
         inserted = next(item for item in rows if self._same_key(item, value))
         return UpsertResult(int(inserted[0]), "INSERTED")
 
+    def upsert_many(self, values: Sequence[AuthorWrite]) -> list[UpsertResult]:
+        if not values:
+            return []
+        proposition_id = values[0].proposition_id
+        if any(value.proposition_id != proposition_id for value in values):
+            raise ValueError("authors must share one proposition")
+        unique_values: list[AuthorWrite] = []
+        seen: set[tuple] = set()
+        for value in values:
+            key = self._value_key(value)
+            if key not in seen:
+                seen.add(key)
+                unique_values.append(value)
+        rows = self.all(
+            f"SELECT ID,CamaraAuthorId,Name,AuthorType,Uri,IsMainAuthor FROM {self.table('PropositionAuthor')} WHERE Proposition=?",
+            (proposition_id,),
+        )
+        results: list[UpsertResult | None] = []
+        inserted_values: list[AuthorWrite] = []
+        for value in unique_values:
+            row = next((item for item in rows if self._same_key(item, value)), None)
+            fields = self._fields(value)
+            if row and tuple(row[1:]) == fields:
+                results.append(UpsertResult(int(row[0]), "UNCHANGED"))
+                continue
+            if row:
+                self.execute(
+                    f"""UPDATE {self.table("PropositionAuthor")} SET CamaraAuthorId=?,Name=?,
+                    AuthorType=?,Uri=?,IsMainAuthor=?,UpdatedAt=? WHERE ID=?""",
+                    (*fields, utc_now(), int(row[0])),
+                )
+                results.append(UpsertResult(int(row[0]), "UPDATED"))
+                continue
+            now = utc_now()
+            self.execute(
+                f"""INSERT INTO {self.table("PropositionAuthor")}
+                (Proposition,CamaraAuthorId,Name,AuthorType,Uri,IsMainAuthor,CreatedAt,UpdatedAt)
+                VALUES (?,?,?,?,?,?,?,?)""",
+                (proposition_id, *fields, now, now),
+            )
+            inserted_values.append(value)
+            results.append(None)
+        if inserted_values:
+            rows = self.all(
+                f"SELECT ID,CamaraAuthorId,Name,AuthorType,Uri,IsMainAuthor FROM {self.table('PropositionAuthor')} WHERE Proposition=?",
+                (proposition_id,),
+            )
+        inserted = iter(inserted_values)
+        resolved: list[UpsertResult] = []
+        for result in results:
+            if result is not None:
+                resolved.append(result)
+                continue
+            value = next(inserted)
+            row = next(item for item in rows if self._same_key(item, value))
+            resolved.append(UpsertResult(int(row[0]), "INSERTED"))
+        return resolved
+
     def names(self, proposition_id: int) -> tuple[str, ...]:
         rows = self.all(
             f"SELECT Name FROM {self.table('PropositionAuthor')} WHERE Proposition=? ORDER BY ID",
@@ -86,3 +144,19 @@ class PropositionAuthorRepository(RepositorySupport):
             str(row[2]).strip().casefold() == value.name.strip().casefold()
             and row[3] == value.author_type
         )
+
+    @staticmethod
+    def _fields(value: AuthorWrite) -> tuple:
+        return (
+            value.camara_author_id,
+            value.name,
+            value.author_type,
+            value.uri,
+            1 if value.is_main_author else 0,
+        )
+
+    @staticmethod
+    def _value_key(value: AuthorWrite) -> tuple:
+        if value.uri:
+            return ("uri", value.uri)
+        return ("name", value.name.strip().casefold(), value.author_type)

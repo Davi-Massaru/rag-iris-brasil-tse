@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.domain import Candidate, SearchResult
+from app.ingestion.chunk_index import CONTEXT_BATCH_SIZE, ChunkIndexPipeline
 from app.ingestion.chunking import PoliticalChunkBuilder, TokenChunker
 from app.ingestion.chunking.chunker import content_hash, normalize_content
 from app.rag import (
@@ -81,6 +82,20 @@ def test_document_builder_rejects_an_unmaterialized_iris_stream() -> None:
 
     with pytest.raises(ValueError, match="unmaterialized IRIS stream"):
         builder.document(row)
+
+
+def test_chunk_context_is_loaded_in_iris_safe_batches() -> None:
+    calls: list[tuple[int, ...]] = []
+
+    def loader(proposition_ids: Sequence[int]) -> dict[int, list[dict]]:
+        batch = tuple(proposition_ids)
+        calls.append(batch)
+        return {proposition_id: [{"name": str(proposition_id)}] for proposition_id in batch}
+
+    context = ChunkIndexPipeline._load_context(tuple(range(450)), loader)
+
+    assert [len(batch) for batch in calls] == [CONTEXT_BATCH_SIZE, CONTEXT_BATCH_SIZE, 50]
+    assert set(context) == set(range(450))
 
 
 def test_rrf_combines_rankings_deterministically() -> None:

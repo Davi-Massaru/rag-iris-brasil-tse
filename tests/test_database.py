@@ -9,7 +9,7 @@ import pytest
 
 from app.config import Settings
 from app.database import IrisConnectionFactory, transaction
-from app.repositories import CandidateRepository
+from app.repositories import CandidateRepository, IngestionRunRepository
 
 pytestmark = pytest.mark.unit
 
@@ -196,3 +196,31 @@ def test_candidate_repository_treats_embedded_empty_optional_values_as_null() ->
     assert candidate.party_number is None
     assert candidate.camara_deputy_id is None
     assert candidate.match_confidence is None
+
+
+def test_ingestion_run_flushes_multiple_counters_in_one_statement() -> None:
+    captured: list[tuple[str, tuple]] = []
+
+    class Cursor:
+        rowcount = 1
+
+        def execute(self, sql, params):  # noqa: ANN001, ANN201
+            captured.append((sql, params))
+
+        def close(self) -> None:
+            return None
+
+    connection = SimpleNamespace(cursor=lambda: Cursor())
+    repository = IngestionRunRepository(connection, "IRISPolitical_Model")
+
+    repository.increment_many(
+        42,
+        {"RecordsSkipped": 3, "RecordsRead": 5, "RecordsCreated": 2},
+    )
+
+    assert len(captured) == 1
+    sql, params = captured[0]
+    assert "RecordsCreated=COALESCE(RecordsCreated,0)+?" in sql
+    assert "RecordsRead=COALESCE(RecordsRead,0)+?" in sql
+    assert "RecordsSkipped=COALESCE(RecordsSkipped,0)+?" in sql
+    assert params == (2, 5, 3, 42)

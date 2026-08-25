@@ -31,6 +31,7 @@ def test_settings_enable_hybrid_iris_access_by_default() -> None:
 
 def test_settings_cover_all_current_camara_matches_by_default() -> None:
     assert Settings(**values()).camara_max_matched_candidates == 50
+    assert Settings(**values()).camara_http_workers == 6
 
 
 def test_settings_reject_vector_dimension_different_from_class() -> None:
@@ -50,3 +51,5 @@ def test_settings_reject_unbounded_camara_limits() -> None:
         Settings(**values(), camara_max_propositions_per_candidate=0)
     with pytest.raises(ValidationError):
         Settings(**values(), camara_max_authors_per_proposition=101)
+    with pytest.raises(ValidationError):
+        Settings(**values(), camara_http_workers=17)

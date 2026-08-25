@@ -61,6 +61,32 @@ class IngestionRunRepository(RepositorySupport):
             (amount, run_id),
         )
 
+    def increment_many(self, run_id: int, increments: dict[str, int]) -> None:
+        """Persist several counters in one IRIS statement.
+
+        Pipeline loops accumulate counters in memory and flush them at the same
+        transaction boundary as their data. This avoids one UPDATE round trip per
+        processed entity without weakening audit consistency.
+        """
+        allowed = {
+            "RecordsRead",
+            "RecordsCreated",
+            "RecordsUpdated",
+            "RecordsSkipped",
+            "RecordsFailed",
+        }
+        values = {name: amount for name, amount in increments.items() if amount}
+        if not values:
+            return
+        if any(name not in allowed or amount < 0 for name, amount in values.items()):
+            raise ValueError("invalid ingestion counters")
+        ordered = sorted(values)
+        assignments = ",".join(f"{name}=COALESCE({name},0)+?" for name in ordered)
+        self.execute(
+            f"UPDATE {self.table('IngestionRun')} SET {assignments} WHERE ID=?",
+            (*[values[name] for name in ordered], run_id),
+        )
+
     def finish(self, run_id: int, status: str, error: str | None = None) -> None:
         if status not in {"SUCCESS", "PARTIAL", "FAILED"}:
             raise ValueError("invalid ingestion status")

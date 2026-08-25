@@ -89,3 +89,31 @@ def test_camara_client_caches_state_search_and_limits_recent_propositions() -> N
     assert date.fromisoformat(params["dataFim"]) - date.fromisoformat(params["dataInicio"]) <= (
         date.resolution * 92
     )
+
+
+def test_camara_client_reuses_deputy_detail_and_history() -> None:
+    class HttpStub:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def get_json(self, url, *, params=None, allowed_hosts=None):  # noqa: ANN001, ANN201
+            del params, allowed_hosts
+            self.calls.append(url)
+            if url.endswith("/historico"):
+                return {"dados": [{"siglaPartido": "ABC"}], "links": []}
+            return {
+                "dados": {
+                    "id": 99,
+                    "nomeCivil": "NOME CIVIL",
+                    "ultimoStatus": {"nome": "NOME", "siglaUf": "SP"},
+                },
+                "links": [],
+            }
+
+    http = HttpStub()
+    client = CamaraClient(Settings(_env_file=None), http)  # type: ignore[arg-type]
+
+    assert client.deputy(99) is client.deputy(99)
+    assert client.history(99) is client.history(99)
+    assert len([url for url in http.calls if url.endswith("/deputados/99")]) == 1
+    assert len([url for url in http.calls if url.endswith("/historico")]) == 1
