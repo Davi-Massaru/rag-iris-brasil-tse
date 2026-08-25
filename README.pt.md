@@ -150,6 +150,16 @@ Consulte **[PIPELINE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/rag-i
 
 Após a ingestão, abra <code>http://localhost:8501</code>, escolha um candidato — ou “Todos os candidatos” — e pergunte. A interface exibe resposta e fontes.
 
+### Exemplos da interface
+
+**Consulta geral — todos os candidatos.** A busca identifica candidaturas com evidências relacionadas à redução da jornada de trabalho, organiza o resultado por candidato e mantém as referências oficiais usadas na resposta.
+
+![Consulta geral sobre redução da jornada de trabalho em todos os candidatos](ex.1.png)
+
+**Consulta específica.** Com uma candidatura selecionada, a aplicação reúne o perfil eleitoral, o vínculo confirmado com a Câmara e evidências parlamentares sobre regulação da internet, proteção de dados e desinformação.
+
+![Consulta específica sobre Enrico Misasi e regulação da internet](ex.2.png)
+
 Teste o fluxo pela API sem escolher um ID manualmente:
 
 ~~~powershell

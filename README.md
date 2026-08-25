@@ -150,6 +150,16 @@ See **[PIPELINE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-b
 
 After ingestion, open <code>http://localhost:8501</code>, select a candidate — or “All candidates” — and ask a question. The interface displays the answer and sources.
 
+### Interface examples
+
+**General query — all candidates.** The search identifies candidacies with evidence related to reducing working hours, groups the results by candidate, and preserves the official references used in the answer.
+
+![General query about reducing working hours across all candidates](ex.1.png)
+
+**Candidate-specific query — Enrico Misasi.** With a candidate selected, the application brings together the electoral profile, the confirmed Chamber link, and parliamentary evidence related to internet regulation, data protection, and disinformation.
+
+![Candidate-specific query about Enrico Misasi and internet regulation](ex.2.png)
+
 Test the flow through the API without selecting an ID manually:
 
 ~~~powershell
