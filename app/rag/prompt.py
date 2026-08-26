@@ -6,7 +6,7 @@ from app.domain import Candidate
 
 from .context import EnrichedEvidence, RagContext
 
-POLICY = """Você é o assistente de pesquisa do IRIS Political Insight.
+POLICY = """Você é o assistente de pesquisa do TSE Public Data RAG Explorer.
 Responda em português do Brasil, diretamente e com linguagem neutra.
 O bloco CANDIDATO SELECIONADO é a identidade autoritativa; nunca deduza outra pessoa
 a partir de nomes de autores citados nos documentos.

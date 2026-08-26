@@ -1,6 +1,6 @@
 # Implementação da Ingestão TSE + Câmara no InterSystems IRIS
 
-> **Projeto:** IRIS Political Insight
+> **Projeto:** TSE Public Data RAG Explorer
 > **Pacote persistente:** `IRISPolitical.Model`
 > **Fontes:** Tribunal Superior Eleitoral e Câmara dos Deputados
 > **Ano eleitoral:** 2026
@@ -523,7 +523,7 @@ Headers:
 
 ```http
 Accept: application/json
-User-Agent: iris-political-insight/1.0
+User-Agent: tse-public-data-rag-explorer/1.0
 ```
 
 Envelope de coleção:

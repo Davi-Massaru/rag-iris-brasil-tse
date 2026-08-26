@@ -1,4 +1,4 @@
-# Classes persistentes — IRIS Political Insight
+# Classes persistentes — TSE Public Data RAG Explorer
 
 Pacote ObjectScript:
 

@@ -1,8 +1,8 @@
-# SPEC — IRIS Political Insight
+# SPEC — TSE Public Data RAG Explorer
 
 ## 1. Visão do produto
 
-**IRIS Political Insight** é uma aplicação RAG construída sobre InterSystems IRIS para consultar informações públicas e oficiais sobre candidatos e políticos brasileiros.
+**TSE Public Data RAG Explorer** é uma aplicação RAG construída sobre InterSystems IRIS para consultar informações públicas e oficiais sobre candidatos e políticos brasileiros.
 
 O sistema deverá consolidar dados eleitorais e históricos políticos provenientes de fontes oficiais e permitir consultas em linguagem natural com respostas fundamentadas nas evidências recuperadas.
 
@@ -703,7 +703,7 @@ Para o MVP utilizar Streamlit.
 Barra lateral e tela principal:
 
 ```text
-┌ Barra lateral ────────────────────┐  IRIS Political Insight
+┌ Barra lateral ────────────────────┐  TSE Public Data RAG Explorer
 │ Perfil do candidato selecionado  │  Consulte propostas e atuações políticas...
 │ nome, cargo, UF, partido,        │
 │ número, vínculo e fonte oficial  │  [Candidato ▼]
@@ -743,7 +743,7 @@ Fonte: Câmara dos Deputados
 # 21. Estrutura do projeto
 
 ```text
-iris-political-insight/
+tse-public-data-rag-explorer/
 │
 ├── docker-compose.yml
 ├── Dockerfile

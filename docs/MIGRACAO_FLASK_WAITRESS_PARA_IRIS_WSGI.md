@@ -1,6 +1,6 @@
 # TASK — Migrar Flask/Waitress para WSGI nativo do InterSystems IRIS
 
-> Projeto: **IRIS Political Insight**  
+> Projeto: **TSE Public Data RAG Explorer**
 > Objetivo deste documento: instruir um agente de código a alterar o repositório atual.  
 > Data de referência técnica: **2026-08-23**.
 
@@ -166,7 +166,7 @@ O módulo já existe:
 
 ```xml
 <Module>
-  <Name>iris-political-insight</Name>
+  <Name>tse-public-data-rag-explorer</Name>
   <Version>1.0.0</Version>
   <Description>Dados políticos oficiais, busca híbrida e RAG no InterSystems IRIS</Description>
   <Packaging>module</Packaging>
@@ -384,9 +384,9 @@ Estrutura alvo aproximada:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <Export generator="Cache" version="25">
-  <Document name="iris-political-insight.ZPM">
+  <Document name="tse-public-data-rag-explorer.ZPM">
     <Module>
-      <Name>iris-political-insight</Name>
+      <Name>tse-public-data-rag-explorer</Name>
       <Version>1.0.0</Version>
       <Description>Dados políticos oficiais, busca híbrida e RAG no InterSystems IRIS</Description>
       <Packaging>module</Packaging>
@@ -399,18 +399,18 @@ Estrutura alvo aproximada:
       <!-- Ajustar paths depois de inspecionar a árvore real do projeto. -->
       <FileCopy
         Name="app/"
-        Target="${libdir}iris-political-insight/app/"
+        Target="${libdir}tse-public-data-rag-explorer/app/"
       />
 
       <FileCopy
         Name="wsgi_app.py"
-        Target="${libdir}iris-political-insight/"
+        Target="${libdir}tse-public-data-rag-explorer/"
       />
 
       <WSGIApplication
         Url="/api"
-        Description="IRIS Political Insight Flask API"
-        WSGIAppLocation="${libdir}iris-political-insight/"
+        Description="TSE Public Data RAG Explorer Flask API"
+        WSGIAppLocation="${libdir}tse-public-data-rag-explorer/"
         WSGIAppName="wsgi_app"
         WSGICallable="app"
       />
@@ -494,7 +494,7 @@ O padrão de referência é:
 ```objectscript
 zn "%SYS"
 Kill props
-Set props("Description") = "IRIS Political Insight Flask API"
+Set props("Description") = "TSE Public Data RAG Explorer Flask API"
 Set props("WSGIAppLocation") = "/path/to/flaskapp"
 Set props("WSGIAppName") = "wsgi_app"
 Set props("WSGICallable") = "app"

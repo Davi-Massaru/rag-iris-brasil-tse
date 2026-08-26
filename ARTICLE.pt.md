@@ -1,4 +1,4 @@
-# Eleições 2026: do dado público à pergunta em linguagem natural com InterSystems IRIS, RAG e Hybrid Search
+# TSE Public Data RAG Explorer: do dado público à pergunta em linguagem natural com RAG e Hybrid Search
 
 > **Nota para publicação:** antes de enviar à Developer Community, substitua o marcador **[LINK OPEN EXCHANGE]** pelo endereço real da aplicação e inclua os perfis dos integrantes, se houver. O repositório não contém essas informações e este artigo não as inventa.
 
@@ -12,7 +12,7 @@ Agosto de 2026. A propaganda eleitoral oficial está autorizada desde o dia 16. 
 
 É um momento em que informação pública deixa de ser assunto abstrato. Milhões de pessoas tentam compreender candidaturas, propostas e trajetórias enquanto os registros relevantes continuam distribuídos em arquivos, APIs e portais diferentes.
 
-Foi nesse contexto que construímos o **IRIS Political Insight**.
+Foi nesse contexto que construímos o **TSE Public Data RAG Explorer**.
 
 ## Nunca tivemos tantos dados. Encontrá-los ainda é difícil.
 
@@ -278,6 +278,6 @@ O caso brasileiro também é relevante fora do Brasil. Ele mostra como Open Gove
 
 As Eleições Gerais de 2026 acontecem agora. Os dados públicos existem agora. A dificuldade de transformá-los em informação explorável também existe agora.
 
-IRIS Political Insight mostra uma maneira concreta de aproximar esses mundos: TSE e Câmara como fontes; InterSystems IRIS como núcleo multimodelo e vetorial; Hybrid Search como estratégia de recuperação; RAG como mecanismo de síntese fundamentada; e fontes oficiais como caminho de volta à evidência.
+TSE Public Data RAG Explorer mostra uma maneira concreta de aproximar esses mundos: TSE e Câmara como fontes; InterSystems IRIS como núcleo multimodelo e vetorial; Hybrid Search como estratégia de recuperação; RAG como mecanismo de síntese fundamentada; e fontes oficiais como caminho de volta à evidência.
 
 A tecnologia não escolhe por ninguém. Ela pode, porém, tornar a informação pública menos distante — uma pergunta de cada vez.

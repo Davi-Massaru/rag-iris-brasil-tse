@@ -73,7 +73,7 @@ class IngestionPipeline:
         )
         dataset = self.tse.dataset()
         LOGGER.info("TSE dataset discovered dataset_id=%s", self.settings.tse_dataset_id)
-        with tempfile.TemporaryDirectory(prefix="iris-political-") as directory:
+        with tempfile.TemporaryDirectory(prefix="tse-public-data-") as directory:
             root = Path(directory)
             self._tse_candidates(dataset, root)
             self._tse_proposals(dataset, root)

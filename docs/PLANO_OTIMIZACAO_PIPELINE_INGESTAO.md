@@ -1,6 +1,6 @@
 # Auditoria da Pipeline de Ingestão
 
-> Projeto: IRIS Political Insight  
+> Projeto: TSE Public Data RAG Explorer
 > Auditoria estática: 24/08/2026; validação operacional final: 25/08/2026  
 > Escopo: TSE, Câmara dos Deputados, persistência IRIS e reconstrução do índice RAG  
 > Regra de evidência: “comprovável” significa derivado diretamente do código ou de

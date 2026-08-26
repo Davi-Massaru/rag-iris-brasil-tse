@@ -1,1 +1,1 @@
-"""IRIS Political Insight."""
+"""TSE Public Data RAG Explorer."""

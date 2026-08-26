@@ -112,7 +112,7 @@ class FakeStreamlit:
     def caption(self, value: str) -> None:
         self.messages.append(("caption", value))
 
-    def markdown(self, value: str) -> None:
+    def markdown(self, value: str, **_kwargs: Any) -> None:
         self.messages.append(("markdown", value))
 
     def write(self, value: str) -> None:
@@ -242,6 +242,7 @@ def test_main_sends_sidebar_candidate_id_to_ask(monkeypatch, candidate_id) -> No
         {"question": "Quais são as propostas?", "candidateId": candidate_id}
     ]
     assert sidebar_calls == ([] if candidate_id is None else [candidate_id])
+    assert ("title", "TSE Public Data RAG Explorer") in fake_st.messages
 
 
 def test_profile_formats_missing_values_and_rejects_invalid_source() -> None:

@@ -380,12 +380,12 @@ def render_answer(result: dict[str, Any]) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="IRIS Political Insight",
+        page_title="TSE Public Data RAG Explorer",
         page_icon="🏛️",
         layout="centered",
     )
     st.markdown(APP_THEME_CSS, unsafe_allow_html=True)
-    st.title("IRIS Political Insight")
+    st.title("TSE Public Data RAG Explorer")
     st.caption(
         "Consulte propostas e atuações políticas com respostas baseadas em fontes oficiais "
         "do TSE e da Câmara dos Deputados."

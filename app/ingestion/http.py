@@ -30,7 +30,7 @@ class HttpClient:
         self.timeout = (connect_timeout, read_timeout)
         self.session = session or requests.Session()
         self.session.headers.update(
-            {"Accept": "application/json", "User-Agent": "iris-political-insight/1.0"}
+            {"Accept": "application/json", "User-Agent": "tse-public-data-rag-explorer/1.0"}
         )
         self.retrying = Retrying(
             stop=stop_after_attempt(max_attempts),

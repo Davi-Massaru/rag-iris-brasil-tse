@@ -1,6 +1,6 @@
 # Classes Persistentes IRIS e Mapeamento do Processo de Ingestão
 
-> **Projeto:** IRIS Political Insight  
+> **Projeto:** TSE Public Data RAG Explorer
 > **Escopo:** implementação atual  
 > **Persistência:** InterSystems IRIS / ObjectScript  
 > **Base das classes:** `Extends %Persistent`  

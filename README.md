@@ -1,14 +1,14 @@
-# 🗳️ IRIS Political Insight
+# 🗳️ TSE Public Data RAG Explorer
 
 ## 🌐 Introduction
 
-**IRIS Political Insight** is a platform for querying and analyzing Brazilian public electoral and parliamentary data. Built with **InterSystems IRIS**, **Hybrid Search**, and **RAG (Retrieval-Augmented Generation)**, it integrates, structures, links, indexes, retrieves, and contextualizes official evidence from the **Superior Electoral Court (TSE)** and the **Chamber of Deputies**, with traceability back to the source.
+**TSE Public Data RAG Explorer** is a platform for querying and analyzing Brazilian public electoral and parliamentary data. Built with **InterSystems IRIS**, **Hybrid Search**, and **RAG (Retrieval-Augmented Generation)**, it integrates, structures, links, indexes, retrieves, and contextualizes official evidence from the **Superior Electoral Court (TSE)** and the **Chamber of Deputies**, with traceability back to the source.
 
-![IRIS Political Insight banner](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/banner.png)
+![TSE Public Data RAG Explorer banner](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/banner.png)
 
 > **Brazil is campaigning for the 2026 General Elections. What if exploring public electoral data were as simple as asking a question?**
 
-[Portuguese version](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/README.pt.md) · [Technical pipeline](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/PIPELINE.pt.md) · [Article in Portuguese](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/ARTICLE.pt.md)
+[Portuguese version](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/README.pt.md) · [Technical pipeline](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/PIPELINE.pt.md) · [Article in Portuguese](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/ARTICLE.pt.md)
 
 On **October 4, 2026**, **158,745,463 voters** will be eligible to participate in Brazil's General Elections, choosing representatives for **six elective offices**: President of the Republic, state governors, the Federal Senate, the Chamber of Deputies, state legislative assemblies, and, in the Federal District, the Legislative Chamber. A **runoff election for president and governors** will be held on **October 25**. Source: [Superior Electoral Court (TSE)](https://www.tse.jus.br/comunicacao/noticias/2026/Julho/mais-de-158-milhoes-de-eleitores-estao-aptos-votar-nas-eleicoes-2026).
 
@@ -144,7 +144,7 @@ Each chunk retains its type, external ID, official URL, candidate, metadata, has
 
 A single command processes TSE candidates, government platforms, Chamber matching and collection, and the RAG index. Downloads are validated, writes are idempotent, chunks use 700 tokens with an overlap of 100, and <code>text-embedding-3-small</code> produces 1,536 dimensions.
 
-See **[PIPELINE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/PIPELINE.pt.md)** for contracts, matching, transactions, pagination, hashes, failures, chunking, and retrieval. The README does not duplicate that documentation.
+See **[PIPELINE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/PIPELINE.pt.md)** for contracts, matching, transactions, pagination, hashes, failures, chunking, and retrieval. The README does not duplicate that documentation.
 
 ## 🧪 Reproducible demonstration
 
@@ -193,12 +193,9 @@ The repository does not contain screenshots, so no prefabricated answer is prese
 
 ### 1. 📥 Clone
 
-This checkout does not have an <code>origin</code> configured; use the HTTPS URL displayed on the published page:
-
 ~~~powershell
-$repositoryUrl = Read-Host "Repository HTTPS URL"
-git clone $repositoryUrl
-Set-Location tse-iris-rag
+git clone https://github.com/Davi-Massaru/tse-public-data-rag-explorer.git
+Set-Location tse-public-data-rag-explorer
 ~~~
 
 ### 2. 🔧 Configure
@@ -301,13 +298,13 @@ docs/             # specifications, decisions, and audits
 
 ## 📚 Documentation
 
-- [Technical pipeline](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/PIPELINE.pt.md)
-- [Specification](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/SPEC%20%E2%80%94%20IRIS%20Political%20Insight.md)
-- [Implementation plan](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/IMPLEMENTATION_PLAN.md)
-- [TSE + Chamber + IRIS ingestion](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md)
-- [IRIS classes and mapping](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md)
-- [WSGI migration](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/docs/MIGRACAO_FLASK_WAITRESS_PARA_IRIS_WSGI.md)
-- [Technical article](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/ARTICLE.pt.md)
+- [Technical pipeline](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/PIPELINE.pt.md)
+- [Specification](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/docs/SPEC%20%E2%80%94%20TSE%20Public%20Data%20RAG%20Explorer.md)
+- [Implementation plan](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/docs/IMPLEMENTATION_PLAN.md)
+- [TSE + Chamber + IRIS ingestion](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/docs/IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md)
+- [IRIS classes and mapping](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/docs/CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md)
+- [WSGI migration](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/docs/MIGRACAO_FLASK_WAITRESS_PARA_IRIS_WSGI.md)
+- [Technical article](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/ARTICLE.pt.md)
 
 ## 🏆 InterSystems Contest 2026
 
@@ -325,11 +322,11 @@ The project competes in the **RAG** category of the [InterSystems PT 2026 Contes
 | Explicit pipeline | Ingestion, chunking, vector, retrieval, prompt, and generation | Implemented and documented |
 | Native WSGI | <code>%SYS.Python.WSGI</code> at <code>/api</code> | Implemented; the formal bonus is in the PyProd category |
 
-The development method using OpenAI Codex, specification prompts, human review, and actual corrections is described in [ARTICLE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/ARTICLE.pt.md).
+The development method using OpenAI Codex, specification prompts, human review, and actual corrections is described in [ARTICLE.pt.md](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/ARTICLE.pt.md).
 
 ## ⚖️ License and responsibility
 
-Code released under the [MIT License](https://raw.githubusercontent.com/Davi-Massaru/rag-iris-brasil-tse/refs/heads/main/LICENSE).
+Code released under the [MIT License](https://raw.githubusercontent.com/Davi-Massaru/tse-public-data-rag-explorer/refs/heads/main/LICENSE).
 
 Independent project, with no affiliation with the TSE, the Chamber, candidacies, or political parties. It organizes public information and does not replace official sources or the voter's judgment.
 

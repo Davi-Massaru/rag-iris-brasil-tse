@@ -1,11 +1,11 @@
-# IMPLEMENTATION_PLAN — IRIS Political Insight
+# IMPLEMENTATION_PLAN — TSE Public Data RAG Explorer
 
 ## 1. Objetivo
 
-Este documento define a ordem de implementação do **IRIS Political Insight** considerando a estrutura atual do repositório:
+Este documento define a ordem de implementação do **TSE Public Data RAG Explorer** considerando a estrutura atual do repositório:
 
 ```text
-tse-iris-rag/
+tse-public-data-rag-explorer/
 │
 ├── .devcontainer/
 ├── .github/
@@ -1600,7 +1600,7 @@ app/ui/streamlit_app.py
 Tela:
 
 ```text
-IRIS Political Insight
+TSE Public Data RAG Explorer
 
 Candidato:
 [ selecionar ]

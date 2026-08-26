@@ -39,7 +39,7 @@ FROM python:3.12-slim AS ui
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
-WORKDIR /opt/iris-political
+WORKDIR /opt/tse-public-data-rag-explorer
 
 COPY requirements-ui.txt ./
 RUN pip install --no-cache-dir -r requirements-ui.txt
@@ -54,7 +54,7 @@ FROM python:3.12-slim AS test
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
-WORKDIR /opt/iris-political
+WORKDIR /opt/tse-public-data-rag-explorer
 
 COPY requirements.txt requirements-api.txt requirements-ui.txt requirements-dev.txt pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements-dev.txt

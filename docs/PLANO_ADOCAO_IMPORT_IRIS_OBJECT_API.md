@@ -1,6 +1,6 @@
 # ORDEM DE OPERAÇÕES 01/2026 — Adoção incremental de `import iris`
 
-> **Projeto:** IRIS Political Insight  
+> **Projeto:** TSE Public Data RAG Explorer
 > **Área de operações:** acesso a dados no Embedded Python do InterSystems IRIS  
 > **Estado:** plano técnico; nenhuma alteração de comportamento autorizada por este documento  
 > **Princípio:** empregar Object API em operações pontuais e manter SQL em operações de conjunto
@@ -63,7 +63,7 @@ Os oito arquivos `docs/*.md` foram inventariados. Há documentos normativos, pla
 
 | Documento consultado | Emprego nesta ordem |
 |---|---|
-| `SPEC — IRIS Political Insight.md` | arquitetura funcional, multimodelo, API e critérios do MVP |
+| `SPEC — TSE Public Data RAG Explorer.md` | arquitetura funcional, multimodelo, API e critérios do MVP |
 | `IMPLEMENTATION_PLAN.md` | separação de camadas, repositories, transações e ordem original |
 | `IMPLEMENTACAO_TECNICA_TECNOLOGIAS_E_LIBS.md` | decisões de stack e fronteira de persistência |
 | `IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md` | upsert, chaves, streams, lotes e idempotência |

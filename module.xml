@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Export generator="Cache" version="25">
-  <Document name="iris-political-insight.ZPM">
+  <Document name="tse-public-data-rag-explorer.ZPM">
     <Module>
-      <Name>iris-political-insight</Name>
-      <Version>1.0.1</Version>
-      <Description>Dados políticos oficiais, busca híbrida e RAG no InterSystems IRIS</Description>
+      <Name>tse-public-data-rag-explorer</Name>
+      <Version>1.0.2</Version>
+      <Description>Exploração de dados públicos oficiais com busca híbrida e RAG</Description>
       <Packaging>module</Packaging>
       <SystemRequirements Version=">=2025.1" IPMVersion=">=0.10.9"/>
       <SourcesRoot>iris</SourcesRoot>
@@ -16,15 +16,15 @@
       <Resource Name="IRISPolitical.Model.Proposition.CLS"/>
       <Resource Name="IRISPolitical.Model.PropositionAuthor.CLS"/>
       <Resource Name="IRISPolitical.Model.PropositionTopic.CLS"/>
-      <FileCopy Name="app/" Target="${libdir}iris-political-insight/app/"/>
-      <FileCopy Name="wsgi_app.py" Target="${libdir}iris-political-insight/"/>
+      <FileCopy Name="app/" Target="${libdir}tse-public-data-rag-explorer/app/"/>
+      <FileCopy Name="wsgi_app.py" Target="${libdir}tse-public-data-rag-explorer/"/>
       <WebApplication
         Url="/api"
         NameSpace="${ns}"
-        Description="IRIS Political Insight Flask API"
+        Description="TSE Public Data RAG Explorer Flask API"
         AutheEnabled="64"
         MatchRoles=":%All"
-        WSGIAppLocation="${libdir}iris-political-insight/"
+        WSGIAppLocation="${libdir}tse-public-data-rag-explorer/"
         WSGIAppName="wsgi_app"
         WSGICallable="app"
         DispatchClass="%SYS.Python.WSGI"

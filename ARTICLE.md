@@ -1,4 +1,4 @@
-# Brazil's 2026 Election: Turning Public Records into Grounded Answers with InterSystems IRIS, RAG, and Hybrid Search
+# TSE Public Data RAG Explorer: Turning Public Records into Grounded Answers with RAG and Hybrid Search
 
 > **Publication note:** replace **[OPEN EXCHANGE LINK]** with the published application URL before reusing this article. The repository does not contain that external URL, so it is intentionally not fabricated here.
 
@@ -10,7 +10,7 @@ It is August 2026, and Brazil's general election campaign is underway. On Octobe
 
 This timing matters. Public information is not an abstract policy topic when millions of people are trying to understand candidacies, proposals, and public careers. Brazil makes a significant amount of electoral and legislative data available, yet the records remain spread across files, APIs, identifiers, and government portals.
 
-That is the setting in which we built **IRIS Political Insight**.
+That is the setting in which we built **TSE Public Data RAG Explorer**.
 
 ## Plenty of open data, but a difficult path to an answer
 
@@ -26,7 +26,7 @@ We did not want another set of filters, and we did not want a language model ans
 
 ## A natural-language layer over official evidence
 
-IRIS Political Insight is better described as a public-data intelligence platform than as an election chatbot. Its job is to:
+TSE Public Data RAG Explorer is better described as a public-data intelligence platform than as an election chatbot. Its job is to:
 
 **collect → validate → link → persist → index → retrieve → contextualize → explain.**
 
@@ -272,6 +272,6 @@ Brazil is also a useful international case study: Open Government Data, identity
 
 Brazil's 2026 general election is happening now. The public data exists now. The difficulty of turning it into explorable information exists now as well.
 
-IRIS Political Insight offers one concrete bridge: TSE and Chamber data as official sources; InterSystems IRIS as the multimodel and vector core; Hybrid Search as the retrieval strategy; RAG as grounded synthesis; and official links as the path back to evidence.
+TSE Public Data RAG Explorer offers one concrete bridge: TSE and Chamber data as official sources; InterSystems IRIS as the multimodel and vector core; Hybrid Search as the retrieval strategy; RAG as grounded synthesis; and official links as the path back to evidence.
 
 Technology does not choose for the voter. It can make public information less distant — one question at a time.

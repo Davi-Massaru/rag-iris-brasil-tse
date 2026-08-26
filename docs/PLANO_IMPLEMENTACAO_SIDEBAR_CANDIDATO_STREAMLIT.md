@@ -10,7 +10,7 @@ Organizar a interface Streamlit em duas áreas:
 
 ```text
 ÁREA PRINCIPAL
-IRIS Political Insight
+TSE Public Data RAG Explorer
 Consulte propostas e atuações políticas com respostas baseadas em fontes oficiais...
 [ selecionar candidato ]
 pergunta + resposta + evidências
@@ -86,7 +86,7 @@ reruns do Streamlit.
 - `app/ui/streamlit_app.py`;
 - `tests/test_streamlit_app.py`;
 - `tests/test_api.py`;
-- `docs/SPEC — IRIS Political Insight.md`;
+- `docs/SPEC — TSE Public Data RAG Explorer.md`;
 - este documento.
 
 Não foram alterados:
