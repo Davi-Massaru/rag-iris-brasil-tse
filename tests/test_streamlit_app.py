@@ -247,7 +247,7 @@ def test_main_sends_sidebar_candidate_id_to_ask(monkeypatch, candidate_id) -> No
 
 def test_profile_formats_missing_values_and_rejects_invalid_source() -> None:
     container = FakeContainer()
-    candidate = {key: None for key in CANDIDATE}
+    candidate: dict[str, Any] = {key: None for key in CANDIDATE}
     candidate.update({"id": 1, "name": "CANDIDATO", "source_url": "javascript:alert(1)"})
 
     ui.render_candidate_profile(container, candidate)
