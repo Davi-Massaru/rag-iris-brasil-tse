@@ -348,30 +348,65 @@ O bloco de candidato fornece a identidade autoritativa; matches ambíguos perman
 
 ## Construindo o projeto com agentes de IA
 
-A ferramenta de engenharia assistida registrada no repositório é o **OpenAI Codex**. Em runtime, o projeto usa a API da OpenAI para embeddings e geração, com modelos configuráveis e padrões <code>text-embedding-3-small</code> e <code>gpt-5-mini</code>.
+Os documentos em <code>docs/</code> nasceram como artefatos de engenharia escritos manualmente pelo autor e foram refinados com assistência de IA. O processo começou pela definição humana do problema, dos limites políticos e técnicos e dos critérios de qualidade. A IA atuou na expansão das especificações, implementação do código, revisão de consistência e execução de verificações dentro dessas decisões.
 
-O método usou especificações Markdown como prompts duráveis e revisáveis, dividindo a implementação em unidades verificáveis:
+Essa separação de responsabilidades é importante. O autor definiu as escolhas que determinam o sistema:
 
-- a especificação definiu escopo, neutralidade, modelo e critérios de aceite;
-- o plano de implementação dividiu o trabalho em tarefas pequenas;
-- documentos de ingestão fixaram contratos TSE/Câmara e idempotência;
-- uma ordem específica guiou a adoção seletiva da Object API;
-- outra tarefa delimitou a migração de Waitress para WSGI nativo;
-- uma auditoria posterior mediu e otimizou a pipeline.
+- as fontes oficiais e seus contratos: CKAN do TSE, CSV Latin-1, <code>SQ_CANDIDATO</code>, PDFs e API paginada da Câmara;
+- a arquitetura <code>client → contrato externo → mapper → DTO interno → repository → %Persistent</code>;
+- o IRIS como núcleo relacional, documental e vetorial;
+- a divisão entre Object API para operações pontuais e SQL para conjuntos, streams, agregações e vetores;
+- a estratégia de recuperação com busca lexical, <code>VECTOR_COSINE</code>, RRF e planejamento determinístico;
+- os limites transacionais, chaves de idempotência, proveniência, neutralidade e critérios de aceite.
 
-Diretrizes preservadas no plano incluem:
+A IA recebeu essas definições como restrições de engenharia e as transformou em componentes, testes, documentação e correções incrementais. Assim, decisões de produto e arquitetura permaneceram autorais, enquanto a execução ganhou velocidade e capacidade de revisão.
+
+Os arquivos exercem papéis normativos diferentes:
+
+| Documento | Decisão de engenharia preservada |
+|---|---|
+| <code>SPEC — TSE Public Data RAG Explorer.md</code> | escopo, neutralidade, modelo multimodelo, retrieval, RAG e critérios de aceite |
+| <code>CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md</code> | classes persistentes, relacionamentos, índices e identidade dos dados |
+| <code>IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md</code> | contratos físicos das fontes, matching, transações, idempotência e proveniência |
+| <code>IMPLEMENTACAO_TECNICA_TECNOLOGIAS_E_LIBS.md</code> | matriz de tecnologias, responsabilidades e justificativas de adoção ou descarte |
+| <code>IMPLEMENTATION_PLAN.md</code> | ordem de implementação, testes por etapa e definição de pronto |
+| ordens e auditorias específicas | migrações controladas, critérios de avanço, medição e relatório pós-ação |
+
+### Escrita militar como compressão de contexto
+
+Algumas instruções adotam a estrutura de uma **ordem de operações**, técnica de escrita militar usada aqui como ferramenta de engenharia de software. Seções como <code>SITUAÇÃO</code>, <code>MISSÃO</code>, <code>EXECUÇÃO</code>, <code>ADMINISTRAÇÃO E LOGÍSTICA</code> e <code>COMANDO E SINAL</code> organizam contexto, objetivo, limites, sequência, autoridade e evidências de conclusão.
+
+~~~text
+SITUAÇÃO     → estado atual, fontes de verdade e riscos
+MISSÃO       → resultado técnico observável
+EXECUÇÃO     → fases, prioridades e regras de engajamento
+LOGÍSTICA    → dependências, configuração, testes e recuo
+COMANDO      → autoridade para avançar e sinais de sucesso
+PÓS-AÇÃO     → arquivos, testes, diferenças, riscos e decisão
+~~~
+
+Essa forma reduz consumo de tokens porque registra contexto e precedência uma única vez, usa comandos curtos, concentra exceções em “regras de engajamento” ou “fogos proibidos” e encerra cada fase com uma saída verificável. O agente recebe uma missão delimitada por responsabilidade e arquivos, em vez de reconstruir toda a arquitetura a cada prompt.
+
+Uma ordem real do projeto, por exemplo, separou operações adequadas à Object API das que deveriam permanecer em SQL. A matriz associava cada operação à técnica e ao motivo: <code>_OpenId()</code> para leitura por <code>%ID</code>; SQL para <code>IN (...)</code>, joins, agregações, streams, <code>%Vector</code> e retrieval. Essa precisão transformou preferência arquitetural em regra executável e testável.
+
+### Português como linguagem de engenharia
+
+As especificações e instruções foram escritas em português porque TSE e Câmara publicam nomes de campos, conceitos jurídicos, ementas, situações parlamentares, mensagens e documentos nessa língua. Manter documentação, prompts, texto extraído e regras de domínio no mesmo idioma preserva termos como “nome de urna”, “ementa”, “proposta de governo” e “mandato externo”, reduz deriva de tradução e facilita a comparação entre fonte, teste e comportamento.
+
+O inglês funciona como idioma de publicação deste artigo; o português permanece como linguagem de controle da engenharia e do domínio. Essa unidade linguística também economiza tokens ao evitar traduções intermediárias e glossários repetidos em cada tarefa.
+
+Diretrizes compactas preservadas no plano ilustram o padrão:
 
 ~~~text
 Leia a especificação antes de alterar comportamento.
 Preserve idempotência e proveniência.
-Não use IDs internos como identificadores externos.
-Não recomende candidatos.
-Não gere fatos políticos sem evidência.
+Use identificadores oficiais nas fronteiras externas.
+Mantenha fatos políticos vinculados às evidências.
 Execute os testes relevantes após cada alteração.
 Registre divergência documental em vez de inventar comportamento.
 ~~~
 
-Cada tarefa deveria terminar com código, testes, arquivos alterados e resultado da validação. Esse formato permitiu revisar mudanças isoladamente e retornar ao requisito que as originou.
+Cada tarefa terminava com código implementado, testes relevantes, lista de arquivos alterados e resultados de validação. Esse contrato de saída permitia revisar mudanças isoladamente e rastrear cada decisão até o documento que a originou.
 
 ### Onde a primeira solução falhou
 
@@ -391,7 +426,7 @@ A validação combinou testes unitários, integração com IRIS, smoke tests, Ru
 
 ## O papel humano
 
-Codex acelerou leitura, planejamento, implementação, revisão e documentação. O controle humano permaneceu sobre as decisões que importam:
+Agentes de IA aceleraram leitura, implementação, revisão e documentação. O controle humano permaneceu sobre as decisões que importam:
 
 - escolher o que estava dentro e fora do MVP;
 - exigir neutralidade e proveniência;

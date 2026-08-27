@@ -342,30 +342,65 @@ The candidate block supplies the authoritative identity; ambiguous matches remai
 
 ## Building the project with AI coding agents
 
-The engineering agent named in the repository is **OpenAI Codex**. At application runtime, OpenAI APIs provide configurable embeddings and generation; the defaults are <code>text-embedding-3-small</code> and <code>gpt-5-mini</code>.
+The documents under <code>docs/</code> began as engineering artifacts written by hand by the author and were refined with AI assistance. The process started with human definition of the problem, political and technical boundaries, and quality criteria. AI then helped expand the specifications, implement code, review consistency, and execute checks within those decisions.
 
-The development method avoided a single vague “build the entire project” prompt. Versioned Markdown specifications acted as durable prompts:
+This separation of responsibilities matters. The author defined the choices that shape the system:
 
-- a product specification set scope, neutrality, models, and acceptance criteria;
-- an implementation plan split the work into small tasks;
-- ingestion documents fixed TSE and Chamber contracts and idempotency rules;
-- a scoped operation guided selective Object API adoption;
-- another task defined the Waitress-to-native-IRIS-WSGI migration;
-- a later audit measured and optimized ingestion.
+- the official sources and their contracts: TSE CKAN, Latin-1 CSV, <code>SQ_CANDIDATO</code>, PDFs, and the Chamber's paginated API;
+- the <code>client → external contract → mapper → internal DTO → repository → %Persistent</code> architecture;
+- IRIS as the relational, document, and vector core;
+- Object API for point operations and SQL for sets, streams, aggregates, and vectors;
+- retrieval through lexical ranking, <code>VECTOR_COSINE</code>, RRF, and deterministic query planning;
+- transaction boundaries, idempotency keys, provenance, neutrality, and acceptance criteria.
 
-Representative directives preserved in the plan were:
+AI received those definitions as engineering constraints and translated them into components, tests, documentation, and incremental corrections. Product and architecture decisions therefore remained authorial, while execution gained speed and review capacity.
+
+The files have distinct normative roles:
+
+| Document | Preserved engineering decision |
+|---|---|
+| <code>SPEC — TSE Public Data RAG Explorer.md</code> | scope, neutrality, multimodel design, retrieval, RAG, and acceptance criteria |
+| <code>CLASSES_IRIS_E_MAPEAMENTO_INGESTAO_ATUAL.md</code> | persistent classes, relationships, indexes, and data identity |
+| <code>IMPLEMENTACAO_INGESTAO_TSE_CAMARA_IRIS.md</code> | physical source contracts, matching, transactions, idempotency, and provenance |
+| <code>IMPLEMENTACAO_TECNICA_TECNOLOGIAS_E_LIBS.md</code> | technology matrix, responsibilities, and reasons for adoption or exclusion |
+| <code>IMPLEMENTATION_PLAN.md</code> | implementation order, tests per stage, and definition of done |
+| scoped orders and audits | controlled migrations, advance criteria, measurements, and after-action reports |
+
+### Military writing as context compression
+
+Some instructions follow the structure of an **operations order**, a military-writing technique applied here as a software-engineering tool. Sections such as <code>SITUATION</code>, <code>MISSION</code>, <code>EXECUTION</code>, <code>ADMINISTRATION AND LOGISTICS</code>, and <code>COMMAND AND SIGNAL</code> organize context, objective, constraints, sequence, authority, and completion evidence.
 
 ~~~text
-Read the specification before changing behavior.
-Preserve idempotency and provenance.
-Do not use internal IDs as external identifiers.
-Do not recommend candidates.
-Do not generate political facts without evidence.
-Run relevant tests after each change.
-Record documentation drift instead of inventing behavior.
+SITUAÇÃO     → current state, sources of truth, and risks
+MISSÃO       → observable technical outcome
+EXECUÇÃO     → phases, priorities, and rules of engagement
+LOGÍSTICA    → dependencies, configuration, tests, and rollback
+COMANDO      → authority to advance and success signals
+PÓS-AÇÃO     → files, tests, differences, risks, and decision
 ~~~
 
-Each task was expected to finish with code, relevant tests, changed files, and validation results.
+This form reduces token consumption by recording context and precedence once, using short commands, concentrating exceptions under “rules of engagement” or “restricted actions,” and ending every phase with a verifiable output. The agent receives a mission scoped by responsibility and files instead of reconstructing the entire architecture in every prompt.
+
+One actual project order, for example, separated operations suited to the Object API from those that should remain in SQL. Its matrix associated each operation with a technique and rationale: <code>_OpenId()</code> for reads by <code>%ID</code>; SQL for <code>IN (...)</code>, joins, aggregates, streams, <code>%Vector</code>, and retrieval. That precision turned an architectural preference into an executable and testable rule.
+
+### Portuguese as the engineering language
+
+The specifications and instructions were written in Portuguese because TSE and the Chamber publish field names, legal concepts, bill summaries, parliamentary statuses, messages, and source documents in that language. Keeping documentation, prompts, extracted text, and domain rules in one language preserves terms such as “nome de urna,” “ementa,” “proposta de governo,” and “mandato externo,” reduces translation drift, and simplifies comparison across source, test, and behavior.
+
+English serves as the publication language for this article; Portuguese remains the control language for engineering and domain work. This linguistic consistency also saves tokens by avoiding intermediate translations and repeated glossaries in each task.
+
+Compact directives preserved in the plan illustrate the pattern:
+
+~~~text
+Leia a especificação antes de alterar comportamento.
+Preserve idempotência e proveniência.
+Use identificadores oficiais nas fronteiras externas.
+Mantenha fatos políticos vinculados às evidências.
+Execute os testes relevantes após cada alteração.
+Registre divergência documental em vez de inventar comportamento.
+~~~
+
+Each task ended with implemented code, relevant tests, a changed-file list, and validation results. This output contract made isolated review possible and traced each decision back to the document that originated it.
 
 ### Where early solutions broke
 
@@ -385,7 +420,7 @@ Validation combined unit tests, live IRIS integration, service smoke tests, Ruff
 
 ## The human role
 
-Codex accelerated reading, planning, implementation, review, and documentation. Human control remained over:
+AI agents accelerated reading, implementation, review, and documentation. Human control remained over:
 
 - defining the MVP and exclusions;
 - requiring neutrality and provenance;
